@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 import { enterAsync, EntryError, isTrustedServer, MeetingEntry, parseJoinLink, parseMeet, serverOrigin } from "./api";
 import { Manifest } from "./mirror";
 import { RemotePerson } from "./presence";
+import { MeetRuns } from "./runs";
 import { MeetPlace, MeetSession, SessionState } from "./session";
 
 /** What the extension remembers of a meet folder, so the window that opens it joins again. */
@@ -31,6 +32,10 @@ export const activate = (context: vscode.ExtensionContext) => {
     vscode.commands.registerCommand("rallybeam.leave", () => leaveAsync(context)),
     vscode.commands.registerCommand("rallybeam.goToCursor", goToCursorAsync),
     vscode.commands.registerCommand("rallybeam.setUpPackages", setUpPackagesAsync),
+    vscode.commands.registerCommand("rallybeam.run", () => withRunsAsync((runs) => runs.runAsync())),
+    vscode.commands.registerCommand("rallybeam.runTests", () => withRunsAsync((runs) => runs.runTestsAsync())),
+    vscode.commands.registerCommand("rallybeam.stopRun", () => withRunsAsync((runs) => runs.stopRunAsync())),
+    vscode.commands.registerCommand("rallybeam.restartApp", () => withRunsAsync((runs) => runs.restartAppAsync())),
     vscode.commands.registerCommand("rallybeam.menu", () => showMenuAsync(context)),
     vscode.window.registerUriHandler({ handleUri: (uri) => joinByLinkAsync(context, uri) }),
   );
@@ -166,6 +171,17 @@ const goToCursorAsync = async () => {
   await session.people.goToAsync();
 };
 
+// Run in Rallybeam and the other run commands, once the lobby is over.
+const withRunsAsync = async (act: (runs: MeetRuns) => Promise<void>) => {
+  if (!session) {
+    void vscode.window.showInformationMessage(vscode.l10n.t("You are not in a Rallybeam meet in this window."));
+  } else if (!session.runs) {
+    void vscode.window.showInformationMessage(vscode.l10n.t("The code runs once the interviewer opens the workspace."));
+  } else {
+    await act(session.runs);
+  }
+};
+
 // The project type's packages for the editor, for a candidate who said Not now.
 const setUpPackagesAsync = async () => {
   if (!session?.packages) {
@@ -184,14 +200,22 @@ const showMenuAsync = async (context: vscode.ExtensionContext) => {
   const people = session.people;
   type MenuItem = vscode.QuickPickItem & { person?: RemotePerson };
   const setUp: MenuItem = { label: vscode.l10n.t("$(package) Set up packages for your editor") };
+  const runs = session.runs;
+  const run: MenuItem = { label: runs?.isApp ? vscode.l10n.t("$(open-preview) Show the app") : vscode.l10n.t("$(play) Run in Rallybeam") };
+  const runTests: MenuItem = { label: vscode.l10n.t("$(beaker) Run tests in Rallybeam") };
   const leave: MenuItem = { label: vscode.l10n.t("$(sign-out) Leave meet") };
   const items = [
+    ...(runs?.canRun ? [run, runTests] : []),
     ...(session.packages?.isMissing ? [setUp] : []),
     ...(people ? people.pickItems(people.here()) : []),
     leave,
   ];
   const picked = await vscode.window.showQuickPick(items, { placeHolder: vscode.l10n.t("Meet {0}", session.place.code) });
-  if (picked === setUp) {
+  if (picked === run) {
+    await runs?.runAsync();
+  } else if (picked === runTests) {
+    await runs?.runTestsAsync();
+  } else if (picked === setUp) {
     await setUpPackagesAsync();
   } else if (picked === leave) {
     await leaveAsync(context);
@@ -218,6 +242,7 @@ const leaveAsync = async (context: vscode.ExtensionContext) => {
   session.dispose();
   session = undefined;
   statusBar.hide();
+  void vscode.commands.executeCommand("setContext", "rallybeam.canRun", false);
   if (folder) {
     const meets = storedMeets(context);
     delete meets[folder.fsPath];
@@ -239,7 +264,9 @@ const showState = (place: MeetPlace, state: SessionState) => {
     state === "live" && session?.packages?.isMissing
       ? vscode.l10n.t("$(warning) Rallybeam {0}: set up your editor", place.code)
       : texts[state];
-  statusBar.tooltip = vscode.l10n.t("In meet {0} as {1}. Click for everyone's cursor, or to leave.", place.code, place.participant.displayName);
+  void vscode.commands.executeCommand("setContext", "rallybeam.canRun", Boolean(session?.runs?.canRun));
+  void vscode.commands.executeCommand("setContext", "rallybeam.isApp", Boolean(session?.runs?.isApp));
+  statusBar.tooltip = vscode.l10n.t("In meet {0} as {1}. Click to run the code, go to someone's cursor, or leave.", place.code, place.participant.displayName);
   statusBar.show();
   if (state === "ended") {
     void vscode.window.showInformationMessage(vscode.l10n.t("The meet has ended. Your files stay in this folder."));

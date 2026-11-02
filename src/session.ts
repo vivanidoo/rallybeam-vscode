@@ -11,6 +11,7 @@ import { PackageSetup } from "./packageSetup";
 import { People } from "./people";
 import { participantColor, VSCODE_CLIENT } from "./presence";
 import { CodeProject } from "./project";
+import { MeetRuns } from "./runs";
 
 /** The subprotocol the API's Yjs relay expects next to the participant token. */
 export const RELAY_SUBPROTOCOL = "rallybeam";
@@ -57,6 +58,9 @@ export class MeetSession implements vscode.Disposable {
   /** The packages of the type in front, for the editor, once the code is here. */
   public packages: PackageSetup | undefined;
 
+  /** Run and Run tests in the meet's sandbox, once the lobby is over. */
+  public runs: MeetRuns | undefined;
+
   private isDisposed = false;
 
   constructor(
@@ -78,7 +82,10 @@ export class MeetSession implements vscode.Disposable {
     this.hub = hub;
     hub.on("MeetingStateChanged", (state: MeetingStateView) => this.follow(state));
     hub.onreconnecting(() => this.setState("offline"));
-    hub.onreconnected(() => void this.joinHubAsync());
+    hub.onreconnected(() => {
+      void this.joinHubAsync();
+      void this.runs?.loadAsync();
+    });
     await hub.start();
     await this.joinHubAsync();
   };
@@ -88,6 +95,7 @@ export class MeetSession implements vscode.Disposable {
     this.cursors?.dispose();
     this.people?.dispose();
     this.packages?.dispose();
+    this.runs?.dispose();
     this.mirror?.dispose();
     this.provider?.destroy();
     this.ydoc?.destroy();
@@ -123,6 +131,8 @@ export class MeetSession implements vscode.Disposable {
     }
 
     this.setState("syncing");
+    this.runs = new MeetRuns(this.hub!, this.place, () => this.onState(this.state));
+    this.runs.start();
     const ydoc = new Y.Doc();
     const relay = `${this.place.server.replace(/^http/, "ws")}/yjs`;
     const provider = new WebsocketProvider(relay, `${this.place.code}/code`, ydoc, {

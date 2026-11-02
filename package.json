@@ -60,6 +60,28 @@
         "category": "Rallybeam"
       },
       {
+        "command": "rallybeam.run",
+        "title": "Run in Rallybeam",
+        "category": "Rallybeam",
+        "icon": "$(play)"
+      },
+      {
+        "command": "rallybeam.runTests",
+        "title": "Run tests in Rallybeam",
+        "category": "Rallybeam",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "rallybeam.stopRun",
+        "title": "Stop my run",
+        "category": "Rallybeam"
+      },
+      {
+        "command": "rallybeam.restartApp",
+        "title": "Restart the app",
+        "category": "Rallybeam"
+      },
+      {
         "command": "rallybeam.setUpPackages",
         "title": "Set up packages for this project",
         "category": "Rallybeam"
@@ -70,6 +92,26 @@
         "category": "Rallybeam"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "rallybeam.run",
+          "when": "rallybeam.canRun",
+          "group": "navigation@1"
+        },
+        {
+          "command": "rallybeam.runTests",
+          "when": "rallybeam.canRun",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "rallybeam.restartApp",
+          "when": "rallybeam.isApp"
+        }
+      ]
+    },
     "configuration": {
       "title": "Rallybeam",
       "properties": {

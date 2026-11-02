@@ -33,7 +33,23 @@ Each meet gets its own folder, `~/Rallybeam/<meet code>` (setting `rallybeam.fol
   removed from the terminal comes back.
 - The folder's `.vscode/settings.json` turns on auto save and LF line endings, so the disk follows the meet.
 - VS Code's undo also takes back changes that arrived from others.
-- What you run in your terminal stays on your machine. The meet's own **Run** runs the shared code for everyone.
+- What you run in your terminal stays on your machine. **Run in Rallybeam** (below) runs the shared code for everyone.
+
+## Running the code
+
+The editor's title bar has **Run in Rallybeam** (▶) and **Run tests in Rallybeam**, also in the status bar's menu and
+the command palette. They run the meet's code in its Rallybeam sandbox, as the web's **Run** does, so the interviewer
+sees every run you start, and you see theirs:
+
+- A program's output and the tests' results show in the **Rallybeam runs** terminal. **Rallybeam: Stop my run**
+  stops yours.
+- An app (React, Vue and the other web types) opens its preview in VS Code's browser panel, beside the code, and
+  reloads as you type. The dev server's log is in the **Rallybeam app** terminal; **Rallybeam: Restart the app**
+  restarts it.
+- A phone app (Expo, React Native, Kotlin Android) runs on the meet's phone, which shows on the meet's page in your
+  browser; its log is in the **Rallybeam app** terminal.
+
+The sandbox runs the code as you type it, saved or not.
 
 ## What it does on your computer
 
