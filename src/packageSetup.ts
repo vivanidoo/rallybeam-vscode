@@ -77,6 +77,25 @@ export class PackageSetup implements vscode.Disposable {
     await this.installAsync(setup);
   };
 
+  /** Before a run on this computer: true once the type's packages are installed, asking to install them first. */
+  public readyAsync = async (): Promise<boolean> => {
+    const setup = editorPackagesFor(this.project.language);
+    if (!setup || !(await this.isMissingAsync(setup))) {
+      return true;
+    }
+    const install = vscode.l10n.t("Install");
+    const answer = await vscode.window.showInformationMessage(
+      vscode.l10n.t("Running {0} on your computer needs its packages. Install them into {1} now?", setup.name, this.root),
+      install,
+      vscode.l10n.t("Not now"),
+    );
+    if (answer !== install) {
+      return false;
+    }
+    await this.installAsync(setup);
+    return !this.isMissing;
+  };
+
   private onTypeChangedAsync = async () => {
     const type = this.project.language;
     if (type === this.checkedType) {

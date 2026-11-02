@@ -37,34 +37,42 @@ Each meet gets its own folder, `~/Rallybeam/<meet code>` (setting `rallybeam.fol
 
 ## Running the code
 
-The editor's title bar has **Run in Rallybeam** (▶) and **Run tests in Rallybeam**, also in the status bar's menu and
-the command palette. They run the meet's code in its Rallybeam sandbox, as the web's **Run** does, so the interviewer
-sees every run you start, and you see theirs:
+Everything is in the **Rallybeam** panel, the icon in VS Code's left bar, and in the menu of the status bar's
+"Rallybeam" item. The editor's title bar has ▶ and the beaker too.
+
+**On your computer:** **Run** and **Run tests** run the code here, in VS Code's terminal, as any project does: a
+program prints its output, an app's dev server starts and its page opens in VS Code's browser panel (it reloads as
+you type), Expo shows a QR code for the Expo Go app on your phone. They need the project type's packages (below),
+and Node.js. Nobody else in the meet sees these runs.
+
+**In Rallybeam:** **Run in Rallybeam** and **Run tests in Rallybeam** run the meet's code in its sandbox, as the web's
+**Run** does, so the interviewer sees every run you start and you see theirs:
 
 - A program's output and the tests' results show in the **Rallybeam runs** terminal. **Rallybeam: Stop my run**
   stops yours.
-- An app (React, Vue and the other web types) opens its preview in VS Code's browser panel, beside the code, and
-  reloads as you type. The dev server's log is in the **Rallybeam app** terminal; **Rallybeam: Restart the app**
-  restarts it.
+- An app opens the sandbox's preview in VS Code's browser panel. The dev server's log is in the **Rallybeam app**
+  terminal; **Rallybeam: Restart the app** restarts it.
 - A phone app (Expo, React Native, Kotlin Android) runs on the meet's phone, which shows on the meet's page in your
-  browser; its log is in the **Rallybeam app** terminal.
+  browser.
 
-The sandbox runs the code as you type it, saved or not.
+JavaScript and TypeScript types run on your computer: React, Vue, Svelte, Solid, HTML, Next.js, Nuxt, React Router,
+Angular, Node.js, TypeScript and Expo. The others (Python, Java, C# and the rest, and React Native) run in Rallybeam.
 
 ## What it does on your computer
 
 The extension is open source so that you can check this yourself. It:
 
 - **Writes files only in the meet's folder**: the meet's files, and `.vscode/settings.json` there. If you agree to
-  set up a JavaScript project's packages, also `package.json`, `tsconfig.json` and `node_modules` in the folder
-  above it (below).
+  set up a JavaScript project's packages, also `package.json`, `tsconfig.json`, `node_modules` and the run settings
+  (`.rallybeam`) in the folder above it (below). Running an Expo project adds a `metro.config.js` in the meet's folder
+  when it has none; it stays on your computer.
 - **Connects only to Rallybeam**: to `app.rallybeam.com` (or another `rallybeam.com` server named in a meet's link),
   or to the server you set in `rallybeam.server`. A link that names any other server is refused.
 - **Sends** the meet's files and your changes to them, the file you have open and your cursor in it, and your name
   and colour in the meet. It reads no other files.
 - **Keeps** the meet's token in VS Code's secret storage, to join again when the folder reopens.
-- **Runs nothing without asking**: it runs none of the meet's code. The only process it starts is
-  `npm install --ignore-scripts` for a project's packages, when you click **Install** (below).
+- **Runs nothing without asking**: it runs the meet's code only when you click **Run** or **Run tests**, and
+  installs a project's packages (`npm install --ignore-scripts`) only when you click **Install** (below).
 - **Collects no telemetry.**
 
 ## Packages for your editor

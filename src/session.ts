@@ -6,6 +6,7 @@ import * as Y from "yjs";
 
 import { ParticipantView } from "./api";
 import { Cursors } from "./cursors";
+import { LocalRunner } from "./localRunner";
 import { FolderMirror, Manifest } from "./mirror";
 import { PackageSetup } from "./packageSetup";
 import { People } from "./people";
@@ -58,6 +59,9 @@ export class MeetSession implements vscode.Disposable {
   /** The packages of the type in front, for the editor, once the code is here. */
   public packages: PackageSetup | undefined;
 
+  /** Run and Run tests on this computer, once the code is here. */
+  public local: LocalRunner | undefined;
+
   /** Run and Run tests in the meet's sandbox, once the lobby is over. */
   public runs: MeetRuns | undefined;
 
@@ -95,6 +99,7 @@ export class MeetSession implements vscode.Disposable {
     this.cursors?.dispose();
     this.people?.dispose();
     this.packages?.dispose();
+    this.local?.dispose();
     this.runs?.dispose();
     this.mirror?.dispose();
     this.provider?.destroy();
@@ -159,6 +164,7 @@ export class MeetSession implements vscode.Disposable {
         this.cursors = new Cursors(provider.awareness, project, this.mirror.idOf);
         this.people = new People(provider.awareness, project, this.mirror.idOf, this.mirror.uriOf);
         this.packages = new PackageSetup(this.folder, project, this.output, () => this.onState(this.state));
+        this.local = new LocalRunner(this.folder, project, this.packages);
         void this.mirror.start().then(() => {
           this.cursors?.start();
           this.people?.start();

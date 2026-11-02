@@ -60,6 +60,18 @@
         "category": "Rallybeam"
       },
       {
+        "command": "rallybeam.runLocal",
+        "title": "Run",
+        "category": "Rallybeam",
+        "icon": "$(play)"
+      },
+      {
+        "command": "rallybeam.testLocal",
+        "title": "Run tests",
+        "category": "Rallybeam",
+        "icon": "$(beaker)"
+      },
+      {
         "command": "rallybeam.run",
         "title": "Run in Rallybeam",
         "category": "Rallybeam",
@@ -95,13 +107,23 @@
     "menus": {
       "editor/title": [
         {
+          "command": "rallybeam.runLocal",
+          "when": "rallybeam.canRunLocally",
+          "group": "navigation@1"
+        },
+        {
+          "command": "rallybeam.testLocal",
+          "when": "rallybeam.canRunLocally",
+          "group": "navigation@2"
+        },
+        {
           "command": "rallybeam.run",
-          "when": "rallybeam.canRun",
+          "when": "rallybeam.canRun && !rallybeam.canRunLocally",
           "group": "navigation@1"
         },
         {
           "command": "rallybeam.runTests",
-          "when": "rallybeam.canRun",
+          "when": "rallybeam.canRun && !rallybeam.canRunLocally",
           "group": "navigation@2"
         }
       ],
@@ -112,6 +134,64 @@
         }
       ]
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "rallybeam",
+          "title": "Rallybeam",
+          "icon": "media/sidebar.svg"
+        }
+      ]
+    },
+    "views": {
+      "rallybeam": [
+        {
+          "id": "rallybeam.meet",
+          "name": "Meet"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "rallybeam.meet",
+        "when": "!rallybeam.inMeet",
+        "contents": "You are not in a meet. Click **Open in VS Code** in a meet's code canvas, or join with the meet's code and the code from your invitation.\n[Join meet](command:rallybeam.join)"
+      },
+      {
+        "view": "rallybeam.meet",
+        "when": "rallybeam.inMeet && rallybeam.canRunLocally",
+        "contents": "**On your computer**\n[$(play) Run](command:rallybeam.runLocal)\n[$(beaker) Run tests](command:rallybeam.testLocal)"
+      },
+      {
+        "view": "rallybeam.meet",
+        "when": "rallybeam.inMeet && rallybeam.canRun",
+        "contents": "**In Rallybeam**, where everyone in the meet sees it\n[$(play) Run in Rallybeam](command:rallybeam.run)\n[$(beaker) Run tests in Rallybeam](command:rallybeam.runTests)"
+      },
+      {
+        "view": "rallybeam.meet",
+        "when": "rallybeam.inMeet && rallybeam.packagesMissing",
+        "contents": "VS Code needs this project type's packages to understand the code and run it here.\n[$(package) Set up packages](command:rallybeam.setUpPackages)"
+      },
+      {
+        "view": "rallybeam.meet",
+        "when": "rallybeam.inMeet",
+        "contents": "[$(person) Go to someone's cursor](command:rallybeam.goToCursor)\n[$(sign-out) Leave meet](command:rallybeam.leave)\nThe call and the task stay in the meet's page in your browser."
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "rallybeam",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "run or test"
+          }
+        }
+      }
+    ],
     "configuration": {
       "title": "Rallybeam",
       "properties": {
