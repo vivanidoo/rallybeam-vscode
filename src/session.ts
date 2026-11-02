@@ -53,6 +53,9 @@ export class MeetSession implements vscode.Disposable {
 
   private cursors: Cursors | undefined;
 
+  // Stops redrawing the panel when the project's type or files change.
+  private stopShape: (() => void) | undefined;
+
   /** Who has which file in front, once the code is here. */
   public people: People | undefined;
 
@@ -104,6 +107,7 @@ export class MeetSession implements vscode.Disposable {
 
   public dispose = () => {
     this.isDisposed = true;
+    this.stopShape?.();
     this.cursors?.dispose();
     this.people?.dispose();
     this.packages?.dispose();
@@ -166,19 +170,22 @@ export class MeetSession implements vscode.Disposable {
       if (!isSynced || this.isDisposed) {
         return;
       }
-      this.setState("live");
       if (!this.mirror) {
         this.mirror = new FolderMirror(this.folder, project, this.manifest, this.saveManifest);
         this.cursors = new Cursors(provider.awareness, project, this.mirror.idOf);
         this.people = new People(provider.awareness, project, this.mirror.idOf, this.mirror.uriOf);
         this.packages = new PackageSetup(this.folder, project, this.output, () => this.onState(this.state));
         this.local = new LocalRunner(this.folder, project, this.packages);
+        // Another project type changes what runs here and the panel's buttons, as when the interviewer switches it.
+        this.stopShape = project.onShapeChanged(() => this.onState(this.state));
         void this.mirror.start().then(() => {
           this.cursors?.start();
           this.people?.start();
           this.packages?.start();
         });
       }
+      // Live once what the panel and the menus show is there: the local runs and who is where.
+      this.setState("live");
     };
     provider.on("sync", onSync);
     provider.on("status", ({ status }: { status: string }) => {
