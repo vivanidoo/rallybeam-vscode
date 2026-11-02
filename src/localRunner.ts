@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 
 import { expoMetroConfig, localPaths, LocalRun, localRunFor } from "./localRuns";
 import { PackageSetup } from "./packageSetup";
+import { showPreviewAsync } from "./preview";
 import { CodeProject } from "./project";
 
 const PREVIEW_WAIT_MS = 120_000;
@@ -165,12 +166,4 @@ const waitForAsync = async (url: string, isRunning: () => boolean): Promise<bool
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   return false;
-};
-
-const showPreviewAsync = async (url: string) => {
-  try {
-    await vscode.commands.executeCommand("simpleBrowser.show", url);
-  } catch {
-    await vscode.env.openExternal(vscode.Uri.parse(url));
-  }
 };

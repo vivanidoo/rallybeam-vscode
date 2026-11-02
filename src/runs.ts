@@ -17,6 +17,7 @@ import {
   TestResultsView,
   toTerminalText,
 } from "./execution";
+import { showPreviewAsync } from "./preview";
 import type { MeetPlace } from "./session";
 
 const BOLD = "\x1b[1m";
@@ -329,22 +330,6 @@ class OutputTerminal implements vscode.Disposable {
     return this.terminal;
   };
 }
-
-// The preview in VS Code's own browser panel, beside the code; the system browser when the editor has no such panel.
-// Opened by itself, it leaves the focus in the editor and never opens the system browser.
-const showPreviewAsync = async (url: string, isQuiet = false) => {
-  try {
-    await vscode.commands.executeCommand(
-      "simpleBrowser.show",
-      url,
-      isQuiet ? { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true } : undefined,
-    );
-  } catch {
-    if (!isQuiet) {
-      await vscode.env.openExternal(vscode.Uri.parse(url));
-    }
-  }
-};
 
 const showRefusal = (refusal: Refusal) => {
   const texts: Record<Refusal, string> = {
