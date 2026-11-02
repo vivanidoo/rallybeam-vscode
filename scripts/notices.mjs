@@ -2,19 +2,11 @@ import * as esbuild from "esbuild";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { bundleOptions } from "./bundleOptions.mjs";
+
 // Writes THIRD_PARTY_NOTICES.md: the licence of every package inside the bundle, found from esbuild's own list of
 // the files it bundles, so the notices follow the dependencies.
-const result = await esbuild.build({
-  entryPoints: ["src/extension.ts"],
-  bundle: true,
-  format: "cjs",
-  platform: "node",
-  target: "node20",
-  external: ["vscode", "bufferutil", "utf-8-validate"],
-  write: false,
-  metafile: true,
-  logLevel: "warning",
-});
+const result = await esbuild.build({ ...bundleOptions, write: false, metafile: true });
 
 const packageRootOf = (file) => {
   const parts = file.split("/");
@@ -26,13 +18,9 @@ const packageRootOf = (file) => {
   return parts.slice(0, at + 1 + length).join("/");
 };
 
-// Packages published without their licence file: the licence of the repository they come from.
-const KNOWN_LICENCES = {
-  "@microsoft/signalr": `The MIT License (MIT)
+const mit = (copyright) => `The MIT License (MIT)
 
-Copyright (c) .NET Foundation and Contributors
-
-All rights reserved.
+${copyright}
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -50,7 +38,38 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.`,
+SOFTWARE.`;
+
+const UNLICENSE = `This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <https://unlicense.org>`;
+
+// Packages published without their licence file: the licence of the repository they come from.
+const KNOWN_LICENCES = {
+  "@microsoft/signalr": mit("Copyright (c) .NET Foundation and Contributors\n\nAll rights reserved."),
+  "fetch-cookie": UNLICENSE,
+  punycode: mit("Copyright Mathias Bynens <https://mathiasbynens.be/>"),
 };
 
 const roots = new Set(Object.keys(result.metafile.inputs).map(packageRootOf).filter(Boolean));
