@@ -420,7 +420,13 @@ const panelModel = (): PanelModel => {
             ? [{ command: "rallybeam.useHere", label: vscode.l10n.t("Use here"), icon: "signIn", isPrimary: true }]
             : [],
       },
-      { heading: vscode.l10n.t("In Rallybeam"), note: vscode.l10n.t("Everyone in the meet sees these runs."), buttons: inRallybeam },
+      {
+        heading: vscode.l10n.t("In Rallybeam"),
+        note: vscode.l10n.t("Everyone in the meet sees these runs."),
+        // Once the lobby is over, the section says why it has no buttons instead of leaving out.
+        message: isOpen && runs && inRallybeam.length === 0 ? runs.unavailableReason : undefined,
+        buttons: inRallybeam,
+      },
       {
         heading: vscode.l10n.t("On your computer"),
         note: packages?.isMissing

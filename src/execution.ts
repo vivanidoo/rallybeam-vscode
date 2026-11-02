@@ -109,6 +109,13 @@ export const refusalOf = (error: unknown): Refusal => {
 /** The types that run on the meet's phone, which the web shows and VS Code cannot (everest-sandbox §5.7). */
 export const PHONE_TYPES = new Set(["expo", "react-native", "kotlin-android"]);
 
+/**
+ * Whether a view may change without the meet saying so, and is worth reading again: none was read (the hub is
+ * reconnecting), or no runner is connected, as while the API restarts. The API tells meets when their runs change, not
+ * when a runner comes back.
+ */
+export const isPassingView = (view: ExecutionView | undefined): boolean => !view || view.reason === "no_runner";
+
 /** Whether the task's app runs on the meet's phone. */
 export const isPhoneView = (view: ExecutionView | undefined): boolean =>
   Boolean(view?.phoneUrl) || PHONE_TYPES.has(view?.environmentId ?? "");

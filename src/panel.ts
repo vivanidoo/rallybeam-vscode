@@ -36,6 +36,8 @@ export interface PanelButton {
 export interface PanelSection {
   heading?: string;
   note?: string;
+  /** Why the section has no buttons now, such as Rallybeam's runs not being reachable; shown without buttons too. */
+  message?: string;
   buttons: PanelButton[];
 }
 
@@ -47,7 +49,7 @@ export interface PanelModel {
   detail?: string;
   /** Where the meet stands, while it is not live. */
   status?: string;
-  /** Drawn in order, with a line between two of them; a section without buttons is left out. */
+  /** Drawn in order, with a line between two of them; a section without buttons or a message is left out. */
   sections: PanelSection[];
 }
 
@@ -85,12 +87,13 @@ const section = (p: PanelSection) =>
     `<section>`,
     p.heading ? `<h2>${escapeHtml(p.heading)}</h2>` : "",
     p.note ? `<p class="note">${escapeHtml(p.note)}</p>` : "",
+    p.message ? `<p class="message">${escapeHtml(p.message)}</p>` : "",
     ...p.buttons.map(button),
     `</section>`,
   ].join("");
 
 export const panelHtml = (model: PanelModel, page: PanelPage): string => {
-  const sections = model.sections.filter((p) => p.buttons.length > 0);
+  const sections = model.sections.filter((p) => p.buttons.length > 0 || p.message);
   const nonce = escapeHtml(page.nonce);
   return `<!DOCTYPE html>
 <html lang="en">
@@ -108,6 +111,7 @@ export const panelHtml = (model: PanelModel, page: PanelPage): string => {
   hr { margin: 14px 0; border: 0; border-top: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35))); }
   h2 { margin: 0 0 2px; font-size: 1em; font-weight: 600; }
   .note { margin: 0 0 8px; color: var(--vscode-descriptionForeground); }
+  .message { margin: 0 0 8px; padding: 6px 8px; border-left: 2px solid var(--vscode-editorWarning-foreground, #cca700); background: var(--vscode-textBlockQuote-background, rgba(127, 127, 127, 0.1)); }
   button { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; max-width: 300px; margin: 0 0 8px; padding: 4px 8px; border: 1px solid var(--vscode-button-border, transparent); border-radius: 2px; font: inherit; line-height: 18px; cursor: pointer; }
   button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
   button.primary:hover { background: var(--vscode-button-hoverBackground); }

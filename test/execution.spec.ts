@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ExecutionView, formatSeconds, joinPreviewOf, meetPageUrl, refusalOf, toTerminalText } from "../src/execution";
+import { ExecutionView, formatSeconds, isPassingView, joinPreviewOf, meetPageUrl, refusalOf, toTerminalText } from "../src/execution";
 
 const app: ExecutionView = {
   isAvailable: true,
@@ -43,5 +43,12 @@ describe("execution", () => {
     expect(joinPreviewOf({ ...app, isAvailable: false })).toBeUndefined();
     expect(joinPreviewOf({ ...app, environmentId: "expo" })).toBeUndefined();
     expect(joinPreviewOf(undefined)).toBeUndefined();
+  });
+
+  it("reads the view again only while it may change by itself", () => {
+    expect(isPassingView(undefined)).toBe(true);
+    expect(isPassingView({ ...app, isAvailable: false, reason: "no_runner" })).toBe(true);
+    expect(isPassingView({ ...app, isAvailable: false, reason: "no_code_task" })).toBe(false);
+    expect(isPassingView(app)).toBe(false);
   });
 });

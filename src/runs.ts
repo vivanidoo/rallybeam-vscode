@@ -5,6 +5,7 @@ import {
   AppLogView,
   ExecutionView,
   formatSeconds,
+  isPassingView,
   isPhoneView,
   joinPreviewOf,
   meetPageUrl,
@@ -25,6 +26,10 @@ const DIM = "\x1b[2m";
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
 const RESET = "\x1b[0m";
+
+// How often the run view is read again while the meet cannot run code for a while: the API tells meets when their
+// runs change, not when a runner comes back, such as after the API restarted.
+const RETRY_MS = 15_000;
 
 /**
  * Run and Run tests in the meet's sandbox, from VS Code (V18): the same runs the web shows, so the interviewer sees
@@ -52,6 +57,8 @@ export class MeetRuns implements vscode.Disposable {
 
   private isDisposed = false;
 
+  private retry: ReturnType<typeof setTimeout> | undefined;
+
   constructor(
     private readonly hub: HubConnection,
     private readonly place: MeetPlace,
@@ -74,6 +81,7 @@ export class MeetRuns implements vscode.Disposable {
 
   public dispose = () => {
     this.isDisposed = true;
+    clearTimeout(this.retry);
     this.handlers.forEach(([name, handler]) => this.hub.off(name, handler as (...args: unknown[]) => void));
     this.runsTerminal.dispose();
     this.appTerminal.dispose();
@@ -88,6 +96,10 @@ export class MeetRuns implements vscode.Disposable {
     }
     if (this.isDisposed) {
       return;
+    }
+    clearTimeout(this.retry);
+    if (isPassingView(this.view)) {
+      this.retry = setTimeout(() => void this.loadAsync(), RETRY_MS);
     }
     this.onChanged();
     if (this.wantsPreview && this.view?.previewUrl) {
@@ -106,6 +118,17 @@ export class MeetRuns implements vscode.Disposable {
 
   public get canRun(): boolean {
     return Boolean(this.view?.isAvailable && this.view.canRun);
+  }
+
+  /** Why Run in Rallybeam is not offered, for the panel; undefined when it is. */
+  public get unavailableReason(): string | undefined {
+    if (!this.view) {
+      return vscode.l10n.t("Rallybeam is still connecting to the meet's runs.");
+    }
+    if (!this.view.isAvailable) {
+      return unavailableText(this.view.reason);
+    }
+    return this.view.canRun ? undefined : vscode.l10n.t("You watch this meet's runs; you cannot start one.");
   }
 
   public get isApp(): boolean {

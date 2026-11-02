@@ -45,4 +45,13 @@ describe("the Rallybeam panel", () => {
     expect(isPanelCommand("workbench.action.terminal.sendSequence")).toBe(false);
     expect(isPanelCommand(undefined)).toBe(false);
   });
+
+  it("shows a section's message without buttons, such as why Rallybeam cannot run the code now", () => {
+    const html = panelHtml(
+      { heading: "Meet", sections: [{ heading: "In Rallybeam", message: "Code execution is not reachable right now.", buttons: [] }] },
+      page,
+    );
+    expect(html).toContain("<h2>In Rallybeam</h2>");
+    expect(html).toContain(`<p class="message">Code execution is not reachable right now.</p>`);
+  });
 });
