@@ -104,6 +104,11 @@
         "category": "Rallybeam"
       },
       {
+        "command": "rallybeam.useHere",
+        "title": "Use the meet in this window",
+        "category": "Rallybeam"
+      },
+      {
         "command": "rallybeam.menu",
         "title": "Meet menu",
         "category": "Rallybeam"

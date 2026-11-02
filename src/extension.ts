@@ -61,6 +61,7 @@ export const activate = (context: vscode.ExtensionContext) => {
     vscode.commands.registerCommand("rallybeam.stopRun", () => withRunsAsync((runs) => runs.stopRunAsync())),
     vscode.commands.registerCommand("rallybeam.restartApp", () => withRunsAsync((runs) => runs.restartAppAsync())),
     vscode.commands.registerCommand("rallybeam.openMeet", openMeetAsync),
+    vscode.commands.registerCommand("rallybeam.useHere", () => resumeAsync(context)),
     vscode.commands.registerCommand("rallybeam.menu", () => showMenuAsync(context)),
     vscode.window.registerUriHandler({ handleUri: (uri) => joinByLinkAsync(context, uri) }),
     vscode.window.registerWebviewViewProvider("rallybeam.meet", panel),
@@ -329,17 +330,20 @@ const showState = (place: MeetPlace, state: SessionState) => {
     syncing: vscode.l10n.t("$(sync~spin) Rallybeam {0}: getting the code", place.code),
     live: vscode.l10n.t("$(broadcast) Rallybeam {0}", place.code),
     offline: vscode.l10n.t("$(debug-disconnect) Rallybeam {0}: reconnecting", place.code),
+    moved: vscode.l10n.t("$(debug-disconnect) Rallybeam {0}: open in another VS Code window", place.code),
     ended: vscode.l10n.t("$(circle-slash) Rallybeam {0}: the meet has ended", place.code),
   };
   statusBar.text =
     state === "live" && session?.packages?.isMissing
       ? vscode.l10n.t("$(warning) Rallybeam {0}: set up your editor", place.code)
       : texts[state];
+  // A meet that moved to another window or ended runs nothing here.
+  const isOpen = state !== "moved" && state !== "ended";
   setContext("rallybeam.inMeet", true);
-  setContext("rallybeam.canRun", Boolean(session?.runs?.canRun));
-  setContext("rallybeam.canRunLocally", Boolean(session?.local?.canRun));
-  setContext("rallybeam.isApp", Boolean(session?.runs?.isApp));
-  setContext("rallybeam.packagesMissing", Boolean(session?.packages?.isMissing));
+  setContext("rallybeam.canRun", isOpen && Boolean(session?.runs?.canRun));
+  setContext("rallybeam.canRunLocally", isOpen && Boolean(session?.local?.canRun));
+  setContext("rallybeam.isApp", isOpen && Boolean(session?.runs?.isApp));
+  setContext("rallybeam.packagesMissing", isOpen && Boolean(session?.packages?.isMissing));
   if (state === "live") {
     void welcomeAsync(place);
   }
@@ -349,6 +353,8 @@ const showState = (place: MeetPlace, state: SessionState) => {
   panel.refresh();
   if (state === "ended") {
     void vscode.window.showInformationMessage(vscode.l10n.t("The meet has ended. Your files stay in this folder."));
+  } else if (state === "moved") {
+    void offerUseHereAsync();
   }
 };
 
@@ -371,10 +377,12 @@ const panelModel = (): PanelModel => {
     syncing: vscode.l10n.t("Getting the code…"),
     live: undefined,
     offline: vscode.l10n.t("Reconnecting…"),
+    moved: vscode.l10n.t("This meet is open in another VS Code window now."),
     ended: vscode.l10n.t("The meet has ended. Your files stay in this folder."),
   };
+  const isOpen = sessionState !== "moved" && sessionState !== "ended";
   const inRallybeam: PanelButton[] = [];
-  if (runs?.canRun) {
+  if (isOpen && runs?.canRun) {
     inRallybeam.push(
       runs.isApp
         ? { command: "rallybeam.run", label: vscode.l10n.t("Show the app"), icon: "preview", isPrimary: true }
@@ -386,17 +394,17 @@ const panelModel = (): PanelModel => {
     }
   }
   const onComputer: PanelButton[] = [];
-  if (local?.canRun) {
+  if (isOpen && local?.canRun) {
     onComputer.push(
       { command: "rallybeam.runLocal", label: vscode.l10n.t("Run"), icon: "play" },
       { command: "rallybeam.testLocal", label: vscode.l10n.t("Run tests"), icon: "beaker" },
     );
   }
-  if (packages?.isMissing) {
+  if (isOpen && packages?.isMissing) {
     onComputer.push({ command: "rallybeam.setUpPackages", label: vscode.l10n.t("Set up packages"), icon: "package" });
   }
   const others: PanelButton[] = [{ command: "rallybeam.openMeet", label: vscode.l10n.t("Open the meet in your browser"), icon: "browser" }];
-  if (people) {
+  if (isOpen && people) {
     others.push({ command: "rallybeam.goToCursor", label: vscode.l10n.t("Go to someone's cursor"), icon: "person" });
   }
   others.push({ command: "rallybeam.leave", label: vscode.l10n.t("Leave meet"), icon: "signOut" });
@@ -406,6 +414,12 @@ const panelModel = (): PanelModel => {
     detail: summary?.title ? vscode.l10n.t("Meet {0}", code) : undefined,
     status: statuses[sessionState],
     sections: [
+      {
+        buttons:
+          sessionState === "moved"
+            ? [{ command: "rallybeam.useHere", label: vscode.l10n.t("Use here"), icon: "signIn", isPrimary: true }]
+            : [],
+      },
       { heading: vscode.l10n.t("In Rallybeam"), note: vscode.l10n.t("Everyone in the meet sees these runs."), buttons: inRallybeam },
       {
         heading: vscode.l10n.t("On your computer"),
@@ -417,6 +431,18 @@ const panelModel = (): PanelModel => {
       { note: vscode.l10n.t("The call and the task stay on the meet's page in your browser."), buttons: others },
     ],
   };
+};
+
+// Like the web's Use here: this window takes the meet back from the other VS Code window, with its stored token.
+const offerUseHereAsync = async () => {
+  const useHere = vscode.l10n.t("Use here");
+  const answer = await vscode.window.showInformationMessage(
+    vscode.l10n.t("This meet is open in another VS Code window now. Use it here to continue in this one."),
+    useHere,
+  );
+  if (answer === useHere) {
+    await resumeAsync(extensionContext);
+  }
 };
 
 const setContext = (key: string, value: boolean) => void vscode.commands.executeCommand("setContext", key, value);

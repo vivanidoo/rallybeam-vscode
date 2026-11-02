@@ -14,6 +14,7 @@ export const PANEL_COMMANDS = [
   "rallybeam.setUpPackages",
   "rallybeam.goToCursor",
   "rallybeam.openMeet",
+  "rallybeam.useHere",
   "rallybeam.leave",
 ] as const;
 

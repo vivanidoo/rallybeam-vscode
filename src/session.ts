@@ -25,7 +25,7 @@ export interface MeetPlace {
 }
 
 /** What the session shows in the status bar. */
-export type SessionState = "connecting" | "lobby" | "syncing" | "live" | "offline" | "ended";
+export type SessionState = "connecting" | "lobby" | "syncing" | "live" | "offline" | "moved" | "ended";
 
 interface MeetingStateView {
   state: string;
@@ -85,6 +85,14 @@ export class MeetSession implements vscode.Disposable {
       .build();
     this.hub = hub;
     hub.on("MeetingStateChanged", (state: MeetingStateView) => this.follow(state));
+    // A newer editor of the same person took the meet, such as another VS Code window; the browser never does
+    // (everest-api MeetingHub, V22). This window stops until the candidate takes the meet back.
+    hub.on("MovedElsewhere", () => {
+      if (!this.isDisposed) {
+        this.setState("moved");
+        this.dispose();
+      }
+    });
     hub.onreconnecting(() => this.setState("offline"));
     hub.onreconnected(() => {
       void this.joinHubAsync();
