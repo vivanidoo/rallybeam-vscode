@@ -109,6 +109,19 @@ export const refusalOf = (error: unknown): Refusal => {
 /** The types that run on the meet's phone, which the web shows and VS Code cannot (everest-sandbox §5.7). */
 export const PHONE_TYPES = new Set(["expo", "react-native", "kotlin-android"]);
 
+/** Whether the task's app runs on the meet's phone. */
+export const isPhoneView = (view: ExecutionView | undefined): boolean =>
+  Boolean(view?.phoneUrl) || PHONE_TYPES.has(view?.environmentId ?? "");
+
+/**
+ * The preview VS Code opens by itself on joining: an app's, only when its dev server already runs, which it does once
+ * the task's code is open on the web (the web's `ensureAppStartedAsync`). Joining never starts the app.
+ */
+export const joinPreviewOf = (view: ExecutionView | undefined): string | undefined =>
+  view?.isAvailable && view.mode === "App" && view.appState === "Running" && view.previewUrl && !isPhoneView(view)
+    ? view.previewUrl
+    : undefined;
+
 /** Output for a terminal, which needs CRLF to start each line at its left edge. */
 export const toTerminalText = (text: string): string => text.replace(/\r?\n/g, "\r\n");
 

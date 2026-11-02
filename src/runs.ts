@@ -5,8 +5,9 @@ import {
   AppLogView,
   ExecutionView,
   formatSeconds,
+  isPhoneView,
+  joinPreviewOf,
   meetPageUrl,
-  PHONE_TYPES,
   Refusal,
   refusalOf,
   RunEndedView,
@@ -28,7 +29,8 @@ const RESET = "\x1b[0m";
  * Run and Run tests in the meet's sandbox, from VS Code (V18): the same runs the web shows, so the interviewer sees
  * every run the candidate starts here and the candidate sees the interviewer's. Their output and test results go to a
  * Rallybeam terminal; an app's preview opens in VS Code's browser panel, with its dev server's log in a terminal of
- * its own. A phone stays on the meet's page.
+ * its own. A phone stays on the meet's page. An app that already runs opens its preview beside the code once per task,
+ * so the candidate sees what the interviewer sees without a click.
  */
 export class MeetRuns implements vscode.Disposable {
   public view: ExecutionView | undefined;
@@ -43,6 +45,9 @@ export class MeetRuns implements vscode.Disposable {
   private ownRunId: string | undefined;
 
   private wantsPreview = false;
+
+  // The task whose preview opened by itself, which does not open again after the candidate closes it.
+  private previewOpenedFor: string | undefined;
 
   private isDisposed = false;
 
@@ -86,7 +91,15 @@ export class MeetRuns implements vscode.Disposable {
     this.onChanged();
     if (this.wantsPreview && this.view?.previewUrl) {
       this.wantsPreview = false;
+      this.previewOpenedFor = this.view.taskPartId ?? undefined;
       await showPreviewAsync(this.view.previewUrl);
+      return;
+    }
+    const url = joinPreviewOf(this.view);
+    const taskPartId = this.view?.taskPartId ?? undefined;
+    if (url && taskPartId && this.previewOpenedFor !== taskPartId) {
+      this.previewOpenedFor = taskPartId;
+      await showPreviewAsync(url, true);
     }
   };
 
@@ -202,8 +215,7 @@ export class MeetRuns implements vscode.Disposable {
     return true;
   };
 
-  private isPhone = (): boolean =>
-    Boolean(this.view?.phoneUrl) || PHONE_TYPES.has(this.view?.environmentId ?? "");
+  private isPhone = (): boolean => isPhoneView(this.view);
 
   private onRunStarted = (run: RunStartedView) => {
     const isMine = run.participantId === this.place.participant.id;
@@ -319,11 +331,18 @@ class OutputTerminal implements vscode.Disposable {
 }
 
 // The preview in VS Code's own browser panel, beside the code; the system browser when the editor has no such panel.
-const showPreviewAsync = async (url: string) => {
+// Opened by itself, it leaves the focus in the editor and never opens the system browser.
+const showPreviewAsync = async (url: string, isQuiet = false) => {
   try {
-    await vscode.commands.executeCommand("simpleBrowser.show", url);
+    await vscode.commands.executeCommand(
+      "simpleBrowser.show",
+      url,
+      isQuiet ? { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true } : undefined,
+    );
   } catch {
-    await vscode.env.openExternal(vscode.Uri.parse(url));
+    if (!isQuiet) {
+      await vscode.env.openExternal(vscode.Uri.parse(url));
+    }
   }
 };
 

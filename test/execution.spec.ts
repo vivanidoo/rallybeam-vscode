@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { formatSeconds, meetPageUrl, refusalOf, toTerminalText } from "../src/execution";
+import { ExecutionView, formatSeconds, joinPreviewOf, meetPageUrl, refusalOf, toTerminalText } from "../src/execution";
+
+const app: ExecutionView = {
+  isAvailable: true,
+  reason: null,
+  environmentId: "react-vite",
+  taskPartId: "part-1",
+  canRun: true,
+  mode: "App",
+  previewUrl: "https://32cb04a7d0f43994.meet.rs/",
+  appState: "Running",
+};
 
 describe("execution", () => {
   it("reads the refusal from the hub's error", () => {
@@ -22,5 +33,15 @@ describe("execution", () => {
 
   it("links the meet's page", () => {
     expect(meetPageUrl("https://app.rallybeam.com/", "ZrUh89uz")).toBe("https://app.rallybeam.com/ZrUh89uz");
+  });
+
+  it("opens an app's preview on joining only when it already runs", () => {
+    expect(joinPreviewOf(app)).toBe("https://32cb04a7d0f43994.meet.rs/");
+    expect(joinPreviewOf({ ...app, canRun: false })).toBe("https://32cb04a7d0f43994.meet.rs/");
+    expect(joinPreviewOf({ ...app, appState: "Starting" })).toBeUndefined();
+    expect(joinPreviewOf({ ...app, mode: "Program" })).toBeUndefined();
+    expect(joinPreviewOf({ ...app, isAvailable: false })).toBeUndefined();
+    expect(joinPreviewOf({ ...app, environmentId: "expo" })).toBeUndefined();
+    expect(joinPreviewOf(undefined)).toBeUndefined();
   });
 });

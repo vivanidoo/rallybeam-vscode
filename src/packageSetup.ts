@@ -108,7 +108,7 @@ export class PackageSetup implements vscode.Disposable {
       await this.offerAsync(
         setup,
         vscode.l10n.t(
-          "This {0} project needs {0}'s packages so VS Code understands its code. Install them into {1}? It takes a minute and needs Node.js; the meet's files do not change.",
+          "VS Code needs {0}'s packages to understand this project's code and to run it on your computer; the preview in Rallybeam works without them. Install them into {1}? It takes a minute and needs Node.js; the meet's files do not change.",
           setup.name,
           this.root,
         ),

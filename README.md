@@ -51,7 +51,8 @@ and Node.js. Nobody else in the meet sees these runs.
 - A program's output and the tests' results show in the **Rallybeam runs** terminal. **Rallybeam: Stop my run**
   stops yours.
 - An app opens the sandbox's preview in VS Code's browser panel. The dev server's log is in the **Rallybeam app**
-  terminal; **Rallybeam: Restart the app** restarts it.
+  terminal; **Rallybeam: Restart the app** restarts it. When you join, an app that already runs in the meet opens
+  its preview beside the code by itself, once; joining never starts it.
 - A phone app (Expo, React Native, Kotlin Android) runs on the meet's phone, which shows on the meet's page in your
   browser.
 
