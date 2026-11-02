@@ -39,14 +39,33 @@ Each meet gets its own folder, `~/Rallybeam/<meet code>` (setting `rallybeam.fol
 
 The extension is open source so that you can check this yourself. It:
 
-- **Writes files only in the meet's folder**: the meet's files, and `.vscode/settings.json` there.
+- **Writes files only in the meet's folder**: the meet's files, and `.vscode/settings.json` there. If you agree to
+  set up a JavaScript project's packages, also `package.json`, `tsconfig.json` and `node_modules` in the folder
+  above it (below).
 - **Connects only to Rallybeam**: to `app.rallybeam.com` (or another `rallybeam.com` server named in a meet's link),
   or to the server you set in `rallybeam.server`. A link that names any other server is refused.
 - **Sends** the meet's files and your changes to them, the file you have open and your cursor in it, and your name
   and colour in the meet. It reads no other files.
 - **Keeps** the meet's token in VS Code's secret storage, to join again when the folder reopens.
-- **Runs nothing**: it starts no processes and runs none of the meet's code.
+- **Runs nothing without asking**: it runs none of the meet's code. The only process it starts is
+  `npm install --ignore-scripts` for a project's packages, when you click **Install** (below).
 - **Collects no telemetry.**
+
+## Packages for your editor
+
+Rallybeam's sandbox brings each JavaScript project type's packages (React, Vue, Vitest and the others), so a meet's
+`package.json` names only what you add yourself, and `npm install` in the meet's folder installs nothing. Without
+them VS Code shows errors such as "Cannot find module 'react'", although **Run** and **Run tests** on Rallybeam work.
+
+So when you join such a meet, the extension offers to install them. With **Install** it writes a `package.json` and
+a `tsconfig.json` in the folder above the meet's (`~/Rallybeam`) and runs `npm install --ignore-scripts` there; Node
+and TypeScript find packages in the folders above a project, as they do in the sandbox. The meet's own files do not
+change. It needs Node.js, and holds one type's packages at a time: joining a meet of another type offers that type's.
+
+With **Not now** nothing is installed. The status bar then shows "set up your editor", which opens the offer again,
+as do the command **Rallybeam: Set up packages for this project**, the first errors those packages would fix, and
+the next join. If `rallybeam.folder` points at a folder with a `package.json` of its own, the extension leaves it
+alone.
 
 VS Code asks whether you trust the authors of a new folder. The extension works either way, also in Restricted Mode.
 

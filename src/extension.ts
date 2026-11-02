@@ -17,16 +17,20 @@ const MEETS_KEY = "rallybeam.meets";
 
 let session: MeetSession | undefined;
 let statusBar: vscode.StatusBarItem;
+let output: vscode.OutputChannel;
 
 export const activate = (context: vscode.ExtensionContext) => {
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBar.command = "rallybeam.menu";
+  output = vscode.window.createOutputChannel("Rallybeam");
   context.subscriptions.push(
     statusBar,
+    output,
     { dispose: () => session?.dispose() },
     vscode.commands.registerCommand("rallybeam.join", () => joinByCodeAsync(context)),
     vscode.commands.registerCommand("rallybeam.leave", () => leaveAsync(context)),
     vscode.commands.registerCommand("rallybeam.goToCursor", goToCursorAsync),
+    vscode.commands.registerCommand("rallybeam.setUpPackages", setUpPackagesAsync),
     vscode.commands.registerCommand("rallybeam.menu", () => showMenuAsync(context)),
     vscode.window.registerUriHandler({ handleUri: (uri) => joinByLinkAsync(context, uri) }),
   );
@@ -133,7 +137,15 @@ const resumeAsync = async (context: vscode.ExtensionContext) => {
       void context.globalState.update(MEETS_KEY, meets);
     }
   };
-  session = new MeetSession(stored.place, token, folder, stored.manifest, saveManifest, (state) => showState(stored.place, state));
+  session = new MeetSession(
+    stored.place,
+    token,
+    folder,
+    stored.manifest,
+    saveManifest,
+    (state) => showState(stored.place, state),
+    output,
+  );
   showState(stored.place, "connecting");
   try {
     await session.startAsync();
@@ -154,17 +166,34 @@ const goToCursorAsync = async () => {
   await session.people.goToAsync();
 };
 
-// The status bar's menu: everyone's cursor, then leaving.
+// The project type's packages for the editor, for a candidate who said Not now.
+const setUpPackagesAsync = async () => {
+  if (!session?.packages) {
+    void vscode.window.showInformationMessage(vscode.l10n.t("You are not in a Rallybeam meet in this window."));
+    return;
+  }
+  await session.packages.setUpAsync();
+};
+
+// The status bar's menu: setting up the packages while they are missing, everyone's cursor, then leaving.
 const showMenuAsync = async (context: vscode.ExtensionContext) => {
   if (!session) {
     await vscode.commands.executeCommand("rallybeam.join");
     return;
   }
   const people = session.people;
-  const leave: vscode.QuickPickItem & { person?: RemotePerson } = { label: vscode.l10n.t("$(sign-out) Leave meet") };
-  const items = [...(people ? people.pickItems(people.here()) : []), leave];
+  type MenuItem = vscode.QuickPickItem & { person?: RemotePerson };
+  const setUp: MenuItem = { label: vscode.l10n.t("$(package) Set up packages for your editor") };
+  const leave: MenuItem = { label: vscode.l10n.t("$(sign-out) Leave meet") };
+  const items = [
+    ...(session.packages?.isMissing ? [setUp] : []),
+    ...(people ? people.pickItems(people.here()) : []),
+    leave,
+  ];
   const picked = await vscode.window.showQuickPick(items, { placeHolder: vscode.l10n.t("Meet {0}", session.place.code) });
-  if (picked === leave) {
+  if (picked === setUp) {
+    await setUpPackagesAsync();
+  } else if (picked === leave) {
     await leaveAsync(context);
   } else if (picked?.person) {
     await people?.goToAsync(picked.person);
@@ -206,7 +235,10 @@ const showState = (place: MeetPlace, state: SessionState) => {
     offline: vscode.l10n.t("$(debug-disconnect) Rallybeam {0}: reconnecting", place.code),
     ended: vscode.l10n.t("$(circle-slash) Rallybeam {0}: the meet has ended", place.code),
   };
-  statusBar.text = texts[state];
+  statusBar.text =
+    state === "live" && session?.packages?.isMissing
+      ? vscode.l10n.t("$(warning) Rallybeam {0}: set up your editor", place.code)
+      : texts[state];
   statusBar.tooltip = vscode.l10n.t("In meet {0} as {1}. Click for everyone's cursor, or to leave.", place.code, place.participant.displayName);
   statusBar.show();
   if (state === "ended") {

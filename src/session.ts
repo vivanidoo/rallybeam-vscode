@@ -7,6 +7,7 @@ import * as Y from "yjs";
 import { ParticipantView } from "./api";
 import { Cursors } from "./cursors";
 import { FolderMirror, Manifest } from "./mirror";
+import { PackageSetup } from "./packageSetup";
 import { People } from "./people";
 import { participantColor, VSCODE_CLIENT } from "./presence";
 import { CodeProject } from "./project";
@@ -53,6 +54,9 @@ export class MeetSession implements vscode.Disposable {
   /** Who has which file in front, once the code is here. */
   public people: People | undefined;
 
+  /** The packages of the type in front, for the editor, once the code is here. */
+  public packages: PackageSetup | undefined;
+
   private isDisposed = false;
 
   constructor(
@@ -62,6 +66,7 @@ export class MeetSession implements vscode.Disposable {
     private readonly manifest: Manifest,
     private readonly saveManifest: (manifest: Manifest) => void,
     private readonly onState: (state: SessionState) => void,
+    private readonly output: vscode.OutputChannel,
   ) {}
 
   public startAsync = async () => {
@@ -82,6 +87,7 @@ export class MeetSession implements vscode.Disposable {
     this.isDisposed = true;
     this.cursors?.dispose();
     this.people?.dispose();
+    this.packages?.dispose();
     this.mirror?.dispose();
     this.provider?.destroy();
     this.ydoc?.destroy();
@@ -142,9 +148,11 @@ export class MeetSession implements vscode.Disposable {
         this.mirror = new FolderMirror(this.folder, project, this.manifest, this.saveManifest);
         this.cursors = new Cursors(provider.awareness, project, this.mirror.idOf);
         this.people = new People(provider.awareness, project, this.mirror.idOf, this.mirror.uriOf);
+        this.packages = new PackageSetup(this.folder, project, this.output, () => this.onState(this.state));
         void this.mirror.start().then(() => {
           this.cursors?.start();
           this.people?.start();
+          this.packages?.start();
         });
       }
     };

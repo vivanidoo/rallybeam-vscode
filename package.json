@@ -60,6 +60,11 @@
         "category": "Rallybeam"
       },
       {
+        "command": "rallybeam.setUpPackages",
+        "title": "Set up packages for this project",
+        "category": "Rallybeam"
+      },
+      {
         "command": "rallybeam.menu",
         "title": "Meet menu",
         "category": "Rallybeam"
