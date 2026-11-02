@@ -99,6 +99,11 @@
         "category": "Rallybeam"
       },
       {
+        "command": "rallybeam.openMeet",
+        "title": "Open the meet in your browser",
+        "category": "Rallybeam"
+      },
+      {
         "command": "rallybeam.menu",
         "title": "Meet menu",
         "category": "Rallybeam"
@@ -147,37 +152,11 @@
       "rallybeam": [
         {
           "id": "rallybeam.meet",
+          "type": "webview",
           "name": "Meet"
         }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "rallybeam.meet",
-        "when": "!rallybeam.inMeet",
-        "contents": "You are not in a meet. Click **Open in VS Code** in a meet's code canvas, or join with the meet's code and the code from your invitation.\n[Join meet](command:rallybeam.join)"
-      },
-      {
-        "view": "rallybeam.meet",
-        "when": "rallybeam.inMeet && rallybeam.canRunLocally",
-        "contents": "**On your computer**\n[$(play) Run](command:rallybeam.runLocal)\n[$(beaker) Run tests](command:rallybeam.testLocal)"
-      },
-      {
-        "view": "rallybeam.meet",
-        "when": "rallybeam.inMeet && rallybeam.canRun",
-        "contents": "**In Rallybeam**, where everyone in the meet sees it\n[$(play) Run in Rallybeam](command:rallybeam.run)\n[$(beaker) Run tests in Rallybeam](command:rallybeam.runTests)"
-      },
-      {
-        "view": "rallybeam.meet",
-        "when": "rallybeam.inMeet && rallybeam.packagesMissing",
-        "contents": "VS Code needs this project type's packages to understand the code and run it here.\n[$(package) Set up packages](command:rallybeam.setUpPackages)"
-      },
-      {
-        "view": "rallybeam.meet",
-        "when": "rallybeam.inMeet",
-        "contents": "[$(person) Go to someone's cursor](command:rallybeam.goToCursor)\n[$(sign-out) Leave meet](command:rallybeam.leave)\nThe call and the task stay in the meet's page in your browser."
-      }
-    ],
     "taskDefinitions": [
       {
         "type": "rallybeam",

@@ -28,7 +28,7 @@ export class EntryError extends Error {
   }
 }
 
-export type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<{
+export type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<{
   ok: boolean;
   status: number;
   json(): Promise<unknown>;
@@ -59,6 +59,35 @@ export const enterAsync = async (
     throw new EntryError(reason, response.status);
   }
   return (await response.json()) as MeetingEntry;
+};
+
+/** What the meet's page shows on top: its title and the inviting company, from what anyone with the link may know. */
+export interface MeetSummary {
+  title: string | null;
+  companyName: string | null;
+}
+
+/**
+ * The meet's title and company (`GET /v1/meetings/{code}`); the company only when the meet carries its brand, as on
+ * the web. Undefined when the server cannot tell, which leaves the panel with the code alone.
+ */
+export const meetSummaryAsync = async (server: string, code: string, fetchImpl: Fetch = fetch): Promise<MeetSummary | undefined> => {
+  try {
+    const response = await fetchImpl(`${server}/v1/meetings/${encodeURIComponent(code)}`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      return undefined;
+    }
+    const info = (await response.json()) as { title?: unknown; brand?: { companyName?: unknown } | null };
+    return {
+      title: typeof info.title === "string" && info.title.trim() ? info.title.trim() : null,
+      companyName: typeof info.brand?.companyName === "string" && info.brand.companyName.trim() ? info.brand.companyName.trim() : null,
+    };
+  } catch {
+    return undefined;
+  }
 };
 
 /**

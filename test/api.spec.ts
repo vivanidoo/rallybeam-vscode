@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { enterAsync, EntryError, Fetch, isTrustedServer, parseJoinLink, parseMeet } from "../src/api";
+import { enterAsync, EntryError, Fetch, isTrustedServer, meetSummaryAsync, parseJoinLink, parseMeet } from "../src/api";
 
 const respond = (status: number, body: unknown): Fetch =>
   vi.fn(() => Promise.resolve({ ok: status >= 200 && status < 300, status, json: () => Promise.resolve(body) }));
@@ -30,6 +30,30 @@ describe("enterAsync", () => {
     await expect(enterAsync("https://app.rallybeam.com", "abcd1234", { ticket: "t" }, fetchImpl)).rejects.toMatchObject({
       reason: "http_502",
     });
+  });
+});
+
+describe("meetSummaryAsync", () => {
+  it("reads the meet's title and the company of its brand", async () => {
+    const fetchImpl = respond(200, { code: "abcd1234", title: " Frontend interview ", brand: { companyName: "VUJANIĆ TEHNOMETAL" } });
+
+    expect(await meetSummaryAsync("https://int.rallybeam.com", "abcd1234", fetchImpl)).toEqual({
+      title: "Frontend interview",
+      companyName: "VUJANIĆ TEHNOMETAL",
+    });
+    expect(fetchImpl).toHaveBeenCalledWith("https://int.rallybeam.com/v1/meetings/abcd1234", {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+  });
+
+  it("leaves out what the meet does not have, and gives nothing when the server cannot tell", async () => {
+    expect(await meetSummaryAsync("https://app.rallybeam.com", "abcd1234", respond(200, { title: null, brand: null }))).toEqual({
+      title: null,
+      companyName: null,
+    });
+    expect(await meetSummaryAsync("https://app.rallybeam.com", "abcd1234", respond(404, {}))).toBeUndefined();
+    expect(await meetSummaryAsync("https://app.rallybeam.com", "abcd1234", () => Promise.reject(new Error("offline")))).toBeUndefined();
   });
 });
 

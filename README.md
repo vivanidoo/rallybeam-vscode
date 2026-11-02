@@ -37,24 +37,28 @@ Each meet gets its own folder, `~/Rallybeam/<meet code>` (setting `rallybeam.fol
 
 ## Running the code
 
-Everything is in the **Rallybeam** panel, the icon in VS Code's left bar, and in the menu of the status bar's
-"Rallybeam" item. The editor's title bar has ▶ and the beaker too.
+Everything is in the **Rallybeam** panel, the Rallybeam icon in VS Code's left bar: on top the meet (the inviting
+company, when the meet carries its brand, and the meet's title and code), then its actions in this order, which the
+menu of the status bar's "Rallybeam" item follows too. The editor's title bar has ▶ and the beaker as well.
 
-**On your computer:** **Run** and **Run tests** run the code here, in VS Code's terminal, as any project does: a
-program prints its output, an app's dev server starts and its page opens in VS Code's browser panel (it reloads as
-you type), Expo shows a QR code for the Expo Go app on your phone. They need the project type's packages (below),
-and Node.js. Nobody else in the meet sees these runs.
-
-**In Rallybeam:** **Run in Rallybeam** and **Run tests in Rallybeam** run the meet's code in its sandbox, as the web's
-**Run** does, so the interviewer sees every run you start and you see theirs:
+**In Rallybeam:** **Run** and **Run tests** there run the meet's code in its sandbox, as the web's **Run** does, so
+the interviewer sees every run you start and you see theirs:
 
 - A program's output and the tests' results show in the **Rallybeam runs** terminal. **Rallybeam: Stop my run**
   stops yours.
-- An app opens the sandbox's preview in VS Code's browser panel. The dev server's log is in the **Rallybeam app**
-  terminal; **Rallybeam: Restart the app** restarts it. When you join, an app that already runs in the meet opens
-  its preview beside the code by itself, once; joining never starts it.
+- An app's **Show the app** opens the sandbox's preview in VS Code's browser panel. The dev server's log is in the
+  **Rallybeam app** terminal; **Restart the app** restarts it. When you join, an app that already runs in the meet
+  opens its preview beside the code by itself, once; joining never starts it.
 - A phone app (Expo, React Native, Kotlin Android) runs on the meet's phone, which shows on the meet's page in your
   browser.
+
+**On your computer:** **Run** and **Run tests** there run the code here, in VS Code's terminal, as any project does:
+a program prints its output, an app's dev server starts and its page opens in VS Code's browser panel (it reloads as
+you type), Expo shows a QR code for the Expo Go app on your phone. They need the project type's packages (below),
+and Node.js. Nobody else in the meet sees these runs.
+
+Then **Open the meet in your browser** (the call and the task stay there), **Go to someone's cursor** and **Leave
+meet**.
 
 JavaScript and TypeScript types run on your computer: React, Vue, Svelte, Solid, HTML, Next.js, Nuxt, React Router,
 Angular, Node.js, TypeScript and Expo. The others (Python, Java, C# and the rest, and React Native) run in Rallybeam.

@@ -2,10 +2,23 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { enterAsync, EntryError, isTrustedServer, MeetingEntry, parseJoinLink, parseMeet, serverOrigin } from "./api";
+import {
+  enterAsync,
+  EntryError,
+  isTrustedServer,
+  MeetingEntry,
+  MeetSummary,
+  meetSummaryAsync,
+  parseJoinLink,
+  parseMeet,
+  serverOrigin,
+} from "./api";
+import { meetPageUrl } from "./execution";
 import { Manifest } from "./mirror";
 import { RemotePerson } from "./presence";
 import { LocalRunner } from "./localRunner";
+import { MeetPanel } from "./meetPanel";
+import { PanelButton, PanelModel } from "./panel";
 import { MeetRuns } from "./runs";
 import { MeetPlace, MeetSession, SessionState } from "./session";
 
@@ -21,6 +34,9 @@ let session: MeetSession | undefined;
 let statusBar: vscode.StatusBarItem;
 let output: vscode.OutputChannel;
 let extensionContext: vscode.ExtensionContext;
+let panel: MeetPanel;
+let sessionState: SessionState = "connecting";
+let summary: MeetSummary | undefined;
 
 const WELCOMED_KEY = "rallybeam.welcomed";
 
@@ -29,6 +45,7 @@ export const activate = (context: vscode.ExtensionContext) => {
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBar.command = "rallybeam.menu";
   output = vscode.window.createOutputChannel("Rallybeam");
+  panel = new MeetPanel(panelModel);
   context.subscriptions.push(
     statusBar,
     output,
@@ -43,10 +60,10 @@ export const activate = (context: vscode.ExtensionContext) => {
     vscode.commands.registerCommand("rallybeam.runTests", () => withRunsAsync((runs) => runs.runTestsAsync())),
     vscode.commands.registerCommand("rallybeam.stopRun", () => withRunsAsync((runs) => runs.stopRunAsync())),
     vscode.commands.registerCommand("rallybeam.restartApp", () => withRunsAsync((runs) => runs.restartAppAsync())),
+    vscode.commands.registerCommand("rallybeam.openMeet", openMeetAsync),
     vscode.commands.registerCommand("rallybeam.menu", () => showMenuAsync(context)),
     vscode.window.registerUriHandler({ handleUri: (uri) => joinByLinkAsync(context, uri) }),
-    // The Rallybeam panel holds no items: its welcome content is the meet's buttons (package.json, viewsWelcome).
-    vscode.window.registerTreeDataProvider("rallybeam.meet", { getTreeItem: (item: vscode.TreeItem) => item, getChildren: () => [] }),
+    vscode.window.registerWebviewViewProvider("rallybeam.meet", panel),
   );
   setContext("rallybeam.inMeet", false);
   void resumeAsync(context);
@@ -145,6 +162,7 @@ const resumeAsync = async (context: vscode.ExtensionContext) => {
   }
 
   session?.dispose();
+  summary = undefined;
   const saveManifest = (manifest: Manifest) => {
     const meets = storedMeets(context);
     if (meets[folder.fsPath]) {
@@ -162,6 +180,13 @@ const resumeAsync = async (context: vscode.ExtensionContext) => {
     output,
   );
   showState(stored.place, "connecting");
+  const current = session;
+  void meetSummaryAsync(stored.place.server, stored.place.code).then((found) => {
+    if (session === current) {
+      summary = found;
+      panel.refresh();
+    }
+  });
   try {
     await session.startAsync();
   } catch (error) {
@@ -179,6 +204,15 @@ const goToCursorAsync = async () => {
     return;
   }
   await session.people.goToAsync();
+};
+
+// The meet's page, where the call, the task and the phone are.
+const openMeetAsync = async () => {
+  if (!session) {
+    void vscode.window.showInformationMessage(vscode.l10n.t("You are not in a Rallybeam meet in this window."));
+    return;
+  }
+  await vscode.env.openExternal(vscode.Uri.parse(meetPageUrl(session.place.server, session.place.code)));
 };
 
 // Run and Run tests on this computer, once the code is here.
@@ -212,7 +246,8 @@ const setUpPackagesAsync = async () => {
   await session.packages.setUpAsync();
 };
 
-// The status bar's menu: setting up the packages while they are missing, everyone's cursor, then leaving.
+// The status bar's menu, in the panel's order: the runs in Rallybeam, those on this computer with the packages they
+// need, then everyone's cursor and leaving.
 const showMenuAsync = async (context: vscode.ExtensionContext) => {
   if (!session) {
     await vscode.commands.executeCommand("rallybeam.join");
@@ -231,13 +266,13 @@ const showMenuAsync = async (context: vscode.ExtensionContext) => {
   };
   const runTests: MenuItem = { label: vscode.l10n.t("$(beaker) Run tests in Rallybeam"), description: vscode.l10n.t("everyone in the meet sees it") };
   const leave: MenuItem = { label: vscode.l10n.t("$(sign-out) Leave meet") };
-  const items = [
-    ...(local?.canRun ? [runLocal, testLocal] : []),
-    ...(runs?.canRun ? [run, runTests] : []),
-    ...(session.packages?.isMissing ? [setUp] : []),
-    ...(people ? people.pickItems(people.here()) : []),
-    leave,
+  const separator: MenuItem = { label: "", kind: vscode.QuickPickItemKind.Separator };
+  const groups: MenuItem[][] = [
+    runs?.canRun ? [run, runTests] : [],
+    [...(local?.canRun ? [runLocal, testLocal] : []), ...(session.packages?.isMissing ? [setUp] : [])],
+    [...(people ? people.pickItems(people.here()) : []), leave],
   ];
+  const items = groups.filter((p) => p.length > 0).flatMap((p, index) => (index === 0 ? p : [separator, ...p]));
   const picked = await vscode.window.showQuickPick(items, { placeHolder: vscode.l10n.t("Meet {0}", session.place.code) });
   if (picked === runLocal) {
     await local?.runAsync();
@@ -277,6 +312,8 @@ const leaveAsync = async (context: vscode.ExtensionContext) => {
   setContext("rallybeam.inMeet", false);
   setContext("rallybeam.canRun", false);
   setContext("rallybeam.canRunLocally", false);
+  summary = undefined;
+  panel.refresh();
   if (folder) {
     const meets = storedMeets(context);
     delete meets[folder.fsPath];
@@ -308,9 +345,78 @@ const showState = (place: MeetPlace, state: SessionState) => {
   }
   statusBar.tooltip = vscode.l10n.t("In meet {0} as {1}. Click to run the code, go to someone's cursor, or leave.", place.code, place.participant.displayName);
   statusBar.show();
+  sessionState = state;
+  panel.refresh();
   if (state === "ended") {
     void vscode.window.showInformationMessage(vscode.l10n.t("The meet has ended. Your files stay in this folder."));
   }
+};
+
+// The Rallybeam panel: the meet on top, then the runs everyone sees, the runs on this computer, and the rest.
+const panelModel = (): PanelModel => {
+  if (!session) {
+    return {
+      heading: vscode.l10n.t("Rallybeam"),
+      detail: vscode.l10n.t(
+        "You are not in a meet. Click Open in VS Code in a meet's code canvas, or join with the meet's code and the code from your invitation.",
+      ),
+      sections: [{ buttons: [{ command: "rallybeam.join", label: vscode.l10n.t("Join meet"), icon: "signIn", isPrimary: true }] }],
+    };
+  }
+  const { runs, local, packages, people } = session;
+  const code = session.place.code;
+  const statuses: Record<SessionState, string | undefined> = {
+    connecting: vscode.l10n.t("Connecting to the meet…"),
+    lobby: vscode.l10n.t("Waiting for the interviewer to open the workspace."),
+    syncing: vscode.l10n.t("Getting the code…"),
+    live: undefined,
+    offline: vscode.l10n.t("Reconnecting…"),
+    ended: vscode.l10n.t("The meet has ended. Your files stay in this folder."),
+  };
+  const inRallybeam: PanelButton[] = [];
+  if (runs?.canRun) {
+    inRallybeam.push(
+      runs.isApp
+        ? { command: "rallybeam.run", label: vscode.l10n.t("Show the app"), icon: "preview", isPrimary: true }
+        : { command: "rallybeam.run", label: vscode.l10n.t("Run"), icon: "play", isPrimary: true },
+      { command: "rallybeam.runTests", label: vscode.l10n.t("Run tests"), icon: "beaker", isPrimary: true },
+    );
+    if (runs.isApp) {
+      inRallybeam.push({ command: "rallybeam.restartApp", label: vscode.l10n.t("Restart the app"), icon: "restart" });
+    }
+  }
+  const onComputer: PanelButton[] = [];
+  if (local?.canRun) {
+    onComputer.push(
+      { command: "rallybeam.runLocal", label: vscode.l10n.t("Run"), icon: "play" },
+      { command: "rallybeam.testLocal", label: vscode.l10n.t("Run tests"), icon: "beaker" },
+    );
+  }
+  if (packages?.isMissing) {
+    onComputer.push({ command: "rallybeam.setUpPackages", label: vscode.l10n.t("Set up packages"), icon: "package" });
+  }
+  const others: PanelButton[] = [{ command: "rallybeam.openMeet", label: vscode.l10n.t("Open the meet in your browser"), icon: "browser" }];
+  if (people) {
+    others.push({ command: "rallybeam.goToCursor", label: vscode.l10n.t("Go to someone's cursor"), icon: "person" });
+  }
+  others.push({ command: "rallybeam.leave", label: vscode.l10n.t("Leave meet"), icon: "signOut" });
+  return {
+    company: summary?.companyName ?? undefined,
+    heading: summary?.title ?? vscode.l10n.t("Meet {0}", code),
+    detail: summary?.title ? vscode.l10n.t("Meet {0}", code) : undefined,
+    status: statuses[sessionState],
+    sections: [
+      { heading: vscode.l10n.t("In Rallybeam"), note: vscode.l10n.t("Everyone in the meet sees these runs."), buttons: inRallybeam },
+      {
+        heading: vscode.l10n.t("On your computer"),
+        note: packages?.isMissing
+          ? vscode.l10n.t("Only you see these runs. They need the project type's packages.")
+          : vscode.l10n.t("Only you see these runs."),
+        buttons: onComputer,
+      },
+      { note: vscode.l10n.t("The call and the task stay on the meet's page in your browser."), buttons: others },
+    ],
+  };
 };
 
 const setContext = (key: string, value: boolean) => void vscode.commands.executeCommand("setContext", key, value);
