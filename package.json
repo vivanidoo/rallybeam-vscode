@@ -1,0 +1,184 @@
+{
+  "name": "rallybeam",
+  "displayName": "Rallybeam",
+  "description": "Code in your own editor during a Rallybeam meet: the meet's code as a folder on your disk, live, with everyone's cursor.",
+  "version": "0.1.0",
+  "publisher": "vivani",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "homepage": "https://github.com/vivanidoo/rallybeam-vscode#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vivanidoo/rallybeam-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vivanidoo/rallybeam-vscode/issues"
+  },
+  "keywords": [
+    "rallybeam",
+    "interview",
+    "pair programming",
+    "collaboration",
+    "yjs"
+  ],
+  "galleryBanner": {
+    "color": "#F26B3A",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onUri"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "rallybeam.join",
+        "title": "Join meet",
+        "category": "Rallybeam"
+      },
+      {
+        "command": "rallybeam.leave",
+        "title": "Leave meet",
+        "category": "Rallybeam"
+      },
+      {
+        "command": "rallybeam.goToCursor",
+        "title": "Go to someone's cursor",
+        "category": "Rallybeam"
+      },
+      {
+        "command": "rallybeam.menu",
+        "title": "Meet menu",
+        "category": "Rallybeam"
+      }
+    ],
+    "configuration": {
+      "title": "Rallybeam",
+      "properties": {
+        "rallybeam.server": {
+          "type": "string",
+          "default": "https://app.rallybeam.com",
+          "description": "The Rallybeam server that Join meet uses. Links from a meet carry their own server."
+        },
+        "rallybeam.folder": {
+          "type": "string",
+          "default": "",
+          "description": "Where each meet's folder is made. Empty: a Rallybeam folder in your home folder."
+        }
+      }
+    },
+    "colors": [
+      {
+        "id": "rallybeam.person0",
+        "description": "Participant colour 1 in the meet, as on the web.",
+        "defaults": {
+          "dark": "#2563EB",
+          "light": "#2563EB",
+          "highContrast": "#2563EB"
+        }
+      },
+      {
+        "id": "rallybeam.person1",
+        "description": "Participant colour 2 in the meet, as on the web.",
+        "defaults": {
+          "dark": "#DB2777",
+          "light": "#DB2777",
+          "highContrast": "#DB2777"
+        }
+      },
+      {
+        "id": "rallybeam.person2",
+        "description": "Participant colour 3 in the meet, as on the web.",
+        "defaults": {
+          "dark": "#16A34A",
+          "light": "#16A34A",
+          "highContrast": "#16A34A"
+        }
+      },
+      {
+        "id": "rallybeam.person3",
+        "description": "Participant colour 4 in the meet, as on the web.",
+        "defaults": {
+          "dark": "#EA580C",
+          "light": "#EA580C",
+          "highContrast": "#EA580C"
+        }
+      },
+      {
+        "id": "rallybeam.person4",
+        "description": "Participant colour 5 in the meet, as on the web.",
+        "defaults": {
+          "dark": "#7C3AED",
+          "light": "#7C3AED",
+          "highContrast": "#7C3AED"
+        }
+      },
+      {
+        "id": "rallybeam.person5",
+        "description": "Participant colour 6 in the meet, as on the web.",
+        "defaults": {
+          "dark": "#0891B2",
+          "light": "#0891B2",
+          "highContrast": "#0891B2"
+        }
+      },
+      {
+        "id": "rallybeam.person6",
+        "description": "Participant colour 7 in the meet, as on the web.",
+        "defaults": {
+          "dark": "#CA8A04",
+          "light": "#CA8A04",
+          "highContrast": "#CA8A04"
+        }
+      },
+      {
+        "id": "rallybeam.person7",
+        "description": "Participant colour 8 in the meet, as on the web.",
+        "defaults": {
+          "dark": "#DC2626",
+          "light": "#DC2626",
+          "highContrast": "#DC2626"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "tsc --noEmit && vitest run && node esbuild.mjs",
+    "package": "node scripts/notices.mjs && node esbuild.mjs --production && vsce package --no-dependencies",
+    "notices": "node scripts/notices.mjs"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^10.0.0",
+    "ws": "^8.18.3",
+    "y-protocols": "^1.0.7",
+    "y-websocket": "^3.1.0",
+    "yjs": "^13.6.33"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "~1.95.0",
+    "@types/ws": "^8.18.1",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.10",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "ovsx": "^0.10.6"
+  }
+}

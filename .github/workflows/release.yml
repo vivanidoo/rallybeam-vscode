@@ -1,0 +1,51 @@
+name: Release
+
+# Builds the .vsix once, in public, and publishes that same file to the VS Code Marketplace and to Open VSX, so
+# anyone can see that the published extension comes from this code. A store is skipped while its token is not set.
+on:
+  workflow_dispatch:
+    inputs:
+      pre-release:
+        description: Publish as a pre-release
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      PRE_RELEASE: ${{ inputs.pre-release && '--pre-release' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Package
+        run: |
+          node scripts/notices.mjs
+          node esbuild.mjs --production
+          npx vsce package --no-dependencies $PRE_RELEASE --out rallybeam.vsix
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rallybeam-vsix
+          path: rallybeam.vsix
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          gh release create "v$version" rallybeam.vsix --title "v$version" --generate-notes ${{ inputs.pre-release && '--prerelease' || '' }}
+      - name: VS Code Marketplace
+        if: env.VSCE_PAT != ''
+        run: npx vsce publish --no-dependencies --packagePath rallybeam.vsix $PRE_RELEASE
+      - name: Open VSX
+        if: env.OVSX_PAT != ''
+        run: npx ovsx publish rallybeam.vsix --pat "$OVSX_PAT" $PRE_RELEASE

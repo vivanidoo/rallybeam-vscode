@@ -1,0 +1,249 @@
+import * as os from "node:os";
+import * as path from "node:path";
+import * as vscode from "vscode";
+
+import { enterAsync, EntryError, isTrustedServer, MeetingEntry, parseJoinLink, parseMeet, serverOrigin } from "./api";
+import { Manifest } from "./mirror";
+import { RemotePerson } from "./presence";
+import { MeetPlace, MeetSession, SessionState } from "./session";
+
+/** What the extension remembers of a meet folder, so the window that opens it joins again. */
+interface StoredMeet {
+  place: MeetPlace;
+  manifest: Manifest;
+}
+
+const MEETS_KEY = "rallybeam.meets";
+
+let session: MeetSession | undefined;
+let statusBar: vscode.StatusBarItem;
+
+export const activate = (context: vscode.ExtensionContext) => {
+  statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusBar.command = "rallybeam.menu";
+  context.subscriptions.push(
+    statusBar,
+    { dispose: () => session?.dispose() },
+    vscode.commands.registerCommand("rallybeam.join", () => joinByCodeAsync(context)),
+    vscode.commands.registerCommand("rallybeam.leave", () => leaveAsync(context)),
+    vscode.commands.registerCommand("rallybeam.goToCursor", goToCursorAsync),
+    vscode.commands.registerCommand("rallybeam.menu", () => showMenuAsync(context)),
+    vscode.window.registerUriHandler({ handleUri: (uri) => joinByLinkAsync(context, uri) }),
+  );
+  void resumeAsync(context);
+};
+
+export const deactivate = () => {
+  session?.dispose();
+};
+
+// Open in VS Code, from the meet's code canvas.
+const joinByLinkAsync = async (context: vscode.ExtensionContext, uri: vscode.Uri) => {
+  const link = parseJoinLink(uri.path, uri.query);
+  if (!link) {
+    return;
+  }
+  const server = link.server ?? configuredServer();
+  if (!isTrustedServer(server, configuredServer())) {
+    void vscode.window.showErrorMessage(vscode.l10n.t("This link is not from a Rallybeam server: {0}", server));
+    return;
+  }
+  await enterAndOpenAsync(context, serverOrigin(server), link.code, { ticket: link.ticket });
+};
+
+// The meet's code (or its link) and the code from the invitation, typed here.
+const joinByCodeAsync = async (context: vscode.ExtensionContext) => {
+  const typed = await vscode.window.showInputBox({
+    title: vscode.l10n.t("Join a Rallybeam meet"),
+    prompt: vscode.l10n.t("The meet's link or code"),
+    placeHolder: "https://app.rallybeam.com/abcd1234",
+    ignoreFocusOut: true,
+  });
+  if (!typed?.trim()) {
+    return;
+  }
+  const meet = parseMeet(typed.trim(), configuredServer());
+  if (!meet) {
+    void vscode.window.showErrorMessage(vscode.l10n.t("That is not a Rallybeam meet's link or code."));
+    return;
+  }
+  const passcode = await vscode.window.showInputBox({
+    title: vscode.l10n.t("Join a Rallybeam meet"),
+    prompt: vscode.l10n.t("The code from your invitation"),
+    password: true,
+    ignoreFocusOut: true,
+  });
+  if (!passcode?.trim()) {
+    return;
+  }
+  await enterAndOpenAsync(context, meet.server, meet.code, { passcode: passcode.trim() });
+};
+
+const enterAndOpenAsync = async (
+  context: vscode.ExtensionContext,
+  server: string,
+  code: string,
+  credential: { ticket: string } | { passcode: string },
+) => {
+  let entry: MeetingEntry;
+  try {
+    entry = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t("Joining the meet…") },
+      () => enterAsync(server, code, credential),
+    );
+  } catch (error) {
+    void vscode.window.showErrorMessage(entryErrorText(error));
+    return;
+  }
+
+  // The meet's own folder, opened as this window's workspace or in a new window.
+  const folder = vscode.Uri.file(path.join(baseFolder(), entry.code));
+  await vscode.workspace.fs.createDirectory(folder);
+  const meets = storedMeets(context);
+  const previous = meets[folder.fsPath];
+  meets[folder.fsPath] = {
+    place: { server, code: entry.code, participant: entry.participant },
+    manifest: previous?.place.code === entry.code ? previous.manifest : {},
+  };
+  await context.globalState.update(MEETS_KEY, meets);
+  await context.secrets.store(tokenKey(folder), entry.token);
+
+  if (isOpenHere(folder)) {
+    await resumeAsync(context);
+  } else {
+    const hasFolder = (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
+    await vscode.commands.executeCommand("vscode.openFolder", folder, { forceNewWindow: hasFolder });
+  }
+};
+
+// The window that has a meet's folder open joins it again, as after Open in VS Code reloads the window.
+const resumeAsync = async (context: vscode.ExtensionContext) => {
+  const folder = vscode.workspace.workspaceFolders?.map((p) => p.uri).find((p) => storedMeets(context)[p.fsPath]);
+  const stored = folder ? storedMeets(context)[folder.fsPath] : undefined;
+  const token = folder ? await context.secrets.get(tokenKey(folder)) : undefined;
+  if (!folder || !stored || !token) {
+    return;
+  }
+
+  session?.dispose();
+  const saveManifest = (manifest: Manifest) => {
+    const meets = storedMeets(context);
+    if (meets[folder.fsPath]) {
+      meets[folder.fsPath] = { ...meets[folder.fsPath], manifest };
+      void context.globalState.update(MEETS_KEY, meets);
+    }
+  };
+  session = new MeetSession(stored.place, token, folder, stored.manifest, saveManifest, (state) => showState(stored.place, state));
+  showState(stored.place, "connecting");
+  try {
+    await session.startAsync();
+  } catch (error) {
+    showState(stored.place, "offline");
+    void vscode.window.showErrorMessage(
+      vscode.l10n.t("Rallybeam could not reach the meet: {0}", error instanceof Error ? error.message : String(error)),
+    );
+  }
+};
+
+// Like clicking someone's dot beside the files on the web.
+const goToCursorAsync = async () => {
+  if (!session?.people) {
+    void vscode.window.showInformationMessage(vscode.l10n.t("You are not in a Rallybeam meet in this window."));
+    return;
+  }
+  await session.people.goToAsync();
+};
+
+// The status bar's menu: everyone's cursor, then leaving.
+const showMenuAsync = async (context: vscode.ExtensionContext) => {
+  if (!session) {
+    await vscode.commands.executeCommand("rallybeam.join");
+    return;
+  }
+  const people = session.people;
+  const leave: vscode.QuickPickItem & { person?: RemotePerson } = { label: vscode.l10n.t("$(sign-out) Leave meet") };
+  const items = [...(people ? people.pickItems(people.here()) : []), leave];
+  const picked = await vscode.window.showQuickPick(items, { placeHolder: vscode.l10n.t("Meet {0}", session.place.code) });
+  if (picked === leave) {
+    await leaveAsync(context);
+  } else if (picked?.person) {
+    await people?.goToAsync(picked.person);
+  }
+};
+
+const leaveAsync = async (context: vscode.ExtensionContext) => {
+  if (!session) {
+    void vscode.commands.executeCommand("rallybeam.join");
+    return;
+  }
+  const leave = vscode.l10n.t("Leave meet");
+  const answer = await vscode.window.showInformationMessage(
+    vscode.l10n.t("Leave meet {0}? The folder and its files stay.", session.place.code),
+    { modal: true },
+    leave,
+  );
+  if (answer !== leave) {
+    return;
+  }
+  const folder = vscode.workspace.workspaceFolders?.map((p) => p.uri).find((p) => storedMeets(context)[p.fsPath]);
+  session.dispose();
+  session = undefined;
+  statusBar.hide();
+  if (folder) {
+    const meets = storedMeets(context);
+    delete meets[folder.fsPath];
+    await context.globalState.update(MEETS_KEY, meets);
+    await context.secrets.delete(tokenKey(folder));
+  }
+};
+
+const showState = (place: MeetPlace, state: SessionState) => {
+  const texts: Record<SessionState, string> = {
+    connecting: vscode.l10n.t("$(sync~spin) Rallybeam {0}: connecting", place.code),
+    lobby: vscode.l10n.t("$(clock) Rallybeam {0}: waiting for the interviewer to open the workspace", place.code),
+    syncing: vscode.l10n.t("$(sync~spin) Rallybeam {0}: getting the code", place.code),
+    live: vscode.l10n.t("$(broadcast) Rallybeam {0}", place.code),
+    offline: vscode.l10n.t("$(debug-disconnect) Rallybeam {0}: reconnecting", place.code),
+    ended: vscode.l10n.t("$(circle-slash) Rallybeam {0}: the meet has ended", place.code),
+  };
+  statusBar.text = texts[state];
+  statusBar.tooltip = vscode.l10n.t("In meet {0} as {1}. Click for everyone's cursor, or to leave.", place.code, place.participant.displayName);
+  statusBar.show();
+  if (state === "ended") {
+    void vscode.window.showInformationMessage(vscode.l10n.t("The meet has ended. Your files stay in this folder."));
+  }
+};
+
+const entryErrorText = (error: unknown): string => {
+  const reason = error instanceof EntryError ? error.reason : "network";
+  switch (reason) {
+    case "wrong_code":
+      return vscode.l10n.t("That code does not open this meet. Check the code from your invitation.");
+    case "ticket_expired":
+      return vscode.l10n.t("The link has expired. Click Open in VS Code in the meet again.");
+    case "code_locked":
+      return vscode.l10n.t("Too many wrong codes. Wait a few minutes and try again.");
+    case "meeting_ended":
+      return vscode.l10n.t("The meet has ended.");
+    case "not_found":
+    case "http_404":
+      return vscode.l10n.t("There is no meet with that code.");
+    default:
+      return vscode.l10n.t("Rallybeam could not be reached. Check your connection and try again.");
+  }
+};
+
+const configuredServer = (): string =>
+  vscode.workspace.getConfiguration("rallybeam").get<string>("server") || "https://app.rallybeam.com";
+
+const baseFolder = (): string =>
+  vscode.workspace.getConfiguration("rallybeam").get<string>("folder") || path.join(os.homedir(), "Rallybeam");
+
+const storedMeets = (context: vscode.ExtensionContext): Record<string, StoredMeet> => ({
+  ...context.globalState.get<Record<string, StoredMeet>>(MEETS_KEY, {}),
+});
+
+const tokenKey = (folder: vscode.Uri) => `rallybeam.token:${folder.fsPath}`;
+
+const isOpenHere = (folder: vscode.Uri): boolean =>
+  vscode.workspace.workspaceFolders?.some((p) => p.uri.fsPath === folder.fsPath) ?? false;

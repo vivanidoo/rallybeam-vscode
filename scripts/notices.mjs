@@ -1,0 +1,83 @@
+import * as esbuild from "esbuild";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+// Writes THIRD_PARTY_NOTICES.md: the licence of every package inside the bundle, found from esbuild's own list of
+// the files it bundles, so the notices follow the dependencies.
+const result = await esbuild.build({
+  entryPoints: ["src/extension.ts"],
+  bundle: true,
+  format: "cjs",
+  platform: "node",
+  target: "node20",
+  external: ["vscode", "bufferutil", "utf-8-validate"],
+  write: false,
+  metafile: true,
+  logLevel: "warning",
+});
+
+const packageRootOf = (file) => {
+  const parts = file.split("/");
+  const at = parts.lastIndexOf("node_modules");
+  if (at < 0) {
+    return undefined;
+  }
+  const length = parts[at + 1].startsWith("@") ? 2 : 1;
+  return parts.slice(0, at + 1 + length).join("/");
+};
+
+// Packages published without their licence file: the licence of the repository they come from.
+const KNOWN_LICENCES = {
+  "@microsoft/signalr": `The MIT License (MIT)
+
+Copyright (c) .NET Foundation and Contributors
+
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.`,
+};
+
+const roots = new Set(Object.keys(result.metafile.inputs).map(packageRootOf).filter(Boolean));
+const notices = [...roots]
+  .map((root) => {
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    const licenceFile = readdirSync(root).find((p) => /^(licen[cs]e|copying)(\.|$)/i.test(p));
+    const text = licenceFile ? readFileSync(join(root, licenceFile), "utf8").trim() : KNOWN_LICENCES[manifest.name];
+    return { name: manifest.name, version: manifest.version, licence: manifest.license, text };
+  })
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+const missing = notices.filter((p) => !p.text);
+if (missing.length > 0) {
+  console.warn(`No licence file in: ${missing.map((p) => p.name).join(", ")}`);
+}
+
+const body = notices
+  .map((p) => `## ${p.name} ${p.version} (${p.licence})\n\n${p.text ? "```text\n" + p.text + "\n```" : "_No licence file in the package._"}`)
+  .join("\n\n");
+const out = join(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "..", "THIRD_PARTY_NOTICES.md");
+writeFileSync(
+  out,
+  `# Third-party notices\n\nThe Rallybeam extension bundles these packages. Their licences follow.\n\n${body}\n`,
+  "utf8",
+);
+console.log(`Wrote the notices of ${notices.length} packages.`);
+if (!existsSync(out)) {
+  process.exit(1);
+}
