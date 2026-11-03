@@ -453,6 +453,15 @@ const panelModel = (): PanelModel => {
   others.push({ command: "rallybeam.leave", label: vscode.l10n.t("Leave meet"), icon: "signOut" });
   return {
     company: summary?.companyName ?? undefined,
+    brand: summary?.brand
+      ? {
+          logoUrl: summary.brand.logoUrl ?? undefined,
+          headerUrl: summary.brand.headerUrl ?? undefined,
+          accentColor: summary.brand.accentColor ?? undefined,
+          welcomeMessage: summary.brand.welcomeMessage ?? undefined,
+          poweredBy: vscode.l10n.t("Powered by Rallybeam"),
+        }
+      : undefined,
     heading: summary?.title ?? vscode.l10n.t("Meet {0}", code),
     detail: summary?.title ? vscode.l10n.t("Meet {0}", code) : undefined,
     status: statuses[sessionState],

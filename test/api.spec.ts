@@ -49,6 +49,7 @@ describe("meetSummaryAsync", () => {
     expect(await meetSummaryAsync("https://int.rallybeam.com", "abcd1234", fetchImpl)).toEqual({
       title: "Frontend interview",
       companyName: "VUJANIĆ TEHNOMETAL",
+      brand: { logoUrl: null, headerUrl: null, accentColor: null, welcomeMessage: null },
       tasks: [
         { id: "t2", order: 1, title: "React counter", state: "Pending" },
         { id: "t1", order: 0, title: "Two sum", state: "Current" },
@@ -60,10 +61,53 @@ describe("meetSummaryAsync", () => {
     });
   });
 
+  it("reads the brand's look, preferring the header image for VS Code to the call background", async () => {
+    const brand = {
+      companyName: "Acme",
+      logoUrl: "/v1/tenants/t/logo?v=1",
+      accentColor: "#EA580C",
+      welcomeMessage: " Welcome to your interview. ",
+      backgroundUrl: "/v1/tenants/t/background?v=2",
+      editorHeaderUrl: "/v1/tenants/t/editor-header?v=3",
+    };
+
+    const withHeader = await meetSummaryAsync("https://int.rallybeam.com", "abcd1234", respond(200, { brand }));
+    const withBackground = await meetSummaryAsync(
+      "https://int.rallybeam.com",
+      "abcd1234",
+      respond(200, { brand: { ...brand, editorHeaderUrl: null } }),
+    );
+
+    expect(withHeader?.brand).toEqual({
+      logoUrl: "https://int.rallybeam.com/v1/tenants/t/logo?v=1",
+      headerUrl: "https://int.rallybeam.com/v1/tenants/t/editor-header?v=3",
+      accentColor: "#ea580c",
+      welcomeMessage: "Welcome to your interview.",
+    });
+    expect(withBackground?.brand?.headerUrl).toBe("https://int.rallybeam.com/v1/tenants/t/background?v=2");
+  });
+
+  it("takes images only from the meet's own server and colours only as #rrggbb", async () => {
+    const brand = {
+      companyName: "Acme",
+      logoUrl: "https://elsewhere.example/logo.png",
+      accentColor: "red;}body{display:none",
+      editorHeaderUrl: "//elsewhere.example/header.png",
+    };
+
+    expect((await meetSummaryAsync("https://int.rallybeam.com", "abcd1234", respond(200, { brand })))?.brand).toEqual({
+      logoUrl: null,
+      headerUrl: null,
+      accentColor: null,
+      welcomeMessage: null,
+    });
+  });
+
   it("leaves out what the meet does not have, and gives nothing when the server cannot tell", async () => {
     expect(await meetSummaryAsync("https://app.rallybeam.com", "abcd1234", respond(200, { title: null, brand: null }))).toEqual({
       title: null,
       companyName: null,
+      brand: null,
       tasks: [],
     });
     expect(await meetSummaryAsync("https://app.rallybeam.com", "abcd1234", respond(404, {}))).toBeUndefined();
