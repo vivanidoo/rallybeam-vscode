@@ -289,10 +289,10 @@
     "@types/node": "^22.10.0",
     "@types/vscode": "~1.95.0",
     "@types/ws": "^8.18.1",
-    "@vscode/vsce": "^3.6.0",
+    "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.25.10",
+    "ovsx": "^0.10.6",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4",
-    "ovsx": "^0.10.6"
+    "vitest": "^3.2.4"
   }
 }

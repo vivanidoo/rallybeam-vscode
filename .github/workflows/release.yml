@@ -1,7 +1,12 @@
 name: Release
 
 # Builds the .vsix once, in public, and publishes that same file to the VS Code Marketplace and to Open VSX, so
-# anyone can see that the published extension comes from this code. A store is skipped while its token is not set.
+# anyone can see that the published extension comes from this code.
+#
+# The Marketplace takes it through Trusted Publishing: GitHub vouches for this workflow (OIDC) and the publisher's
+# Trusted Publishing policy accepts it, so no Marketplace token is stored. It is skipped until the repository variable
+# MARKETPLACE_TRUSTED_PUBLISHING is "true", set once the policy exists. Open VSX takes its token, OVSX_PAT, and is
+# skipped while it is not set.
 on:
   workflow_dispatch:
     inputs:
@@ -11,15 +16,16 @@ on:
         default: true
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  PRE_RELEASE: ${{ inputs.pre-release && '--pre-release' || '' }}
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
-    env:
-      VSCE_PAT: ${{ secrets.VSCE_PAT }}
-      OVSX_PAT: ${{ secrets.OVSX_PAT }}
-      PRE_RELEASE: ${{ inputs.pre-release && '--pre-release' || '' }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,19 +39,60 @@ jobs:
           node scripts/notices.mjs
           node esbuild.mjs --production
           npx vsce package --no-dependencies $PRE_RELEASE --out rallybeam.vsix
+      - id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           name: rallybeam-vsix
           path: rallybeam.vsix
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: rallybeam-vsix
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
-          version=$(node -p "require('./package.json').version")
-          gh release create "v$version" rallybeam.vsix --title "v$version" --generate-notes ${{ inputs.pre-release && '--prerelease' || '' }}
-      - name: VS Code Marketplace
-        if: env.VSCE_PAT != ''
-        run: npx vsce publish --no-dependencies --packagePath rallybeam.vsix $PRE_RELEASE
+          gh release create "v$VERSION" rallybeam.vsix --repo "$GITHUB_REPOSITORY" --title "v$VERSION" \
+            --generate-notes --target "$GITHUB_SHA" ${{ inputs.pre-release && '--prerelease' || '' }}
+
+  # Only this job may ask GitHub for the identity the Marketplace trusts, and it runs nothing of the project's own
+  # dependencies: just the built file and the publishing tool, at a fixed version.
+  marketplace:
+    needs: [build, github-release]
+    if: vars.MARKETPLACE_TRUSTED_PUBLISHING == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: rallybeam-vsix
+      - run: npx --yes @vscode/vsce@4.1.0 publish --oidc --no-dependencies --packagePath rallybeam.vsix $PRE_RELEASE
+
+  open-vsx:
+    needs: [build, github-release]
+    runs-on: ubuntu-latest
+    env:
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: rallybeam-vsix
       - name: Open VSX
         if: env.OVSX_PAT != ''
-        run: npx ovsx publish rallybeam.vsix --pat "$OVSX_PAT" $PRE_RELEASE
+        run: npx --yes ovsx@0.10.12 publish rallybeam.vsix --pat "$OVSX_PAT" $PRE_RELEASE

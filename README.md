@@ -113,7 +113,9 @@ npm run package
 ```
 
 builds `rallybeam-<version>.vsix`, which **Extensions: Install from VSIX…** installs. Releases are built and
-published by the **Release** workflow, to the VS Code Marketplace and to Open VSX.
+published by the **Release** workflow, to the VS Code Marketplace and to Open VSX, from the same file. The Marketplace
+takes it through Trusted Publishing (GitHub's OIDC identity for this workflow, no stored token), once the repository
+variable `MARKETPLACE_TRUSTED_PUBLISHING` is `true`; Open VSX takes the `OVSX_PAT` secret.
 
 ## Licence
 
