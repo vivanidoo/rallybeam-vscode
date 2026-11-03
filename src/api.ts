@@ -3,6 +3,8 @@
  * the code canvas, or the code from the invitation, exchanged for the participant's token.
  */
 
+import type { TaskContent, TaskSummary } from "./tasks";
+
 export type ParticipantRole = "Interviewer" | "Candidate" | "Observer" | string;
 
 export interface ParticipantView {
@@ -65,6 +67,8 @@ export const enterAsync = async (
 export interface MeetSummary {
   title: string | null;
   companyName: string | null;
+  /** The meet's tasks, with which one is current; their titles only. */
+  tasks: TaskSummary[];
 }
 
 /**
@@ -80,10 +84,53 @@ export const meetSummaryAsync = async (server: string, code: string, fetchImpl: 
     if (!response.ok) {
       return undefined;
     }
-    const info = (await response.json()) as { title?: unknown; brand?: { companyName?: unknown } | null };
+    const info = (await response.json()) as { title?: unknown; brand?: { companyName?: unknown } | null; tasks?: unknown };
     return {
       title: typeof info.title === "string" && info.title.trim() ? info.title.trim() : null,
       companyName: typeof info.brand?.companyName === "string" && info.brand.companyName.trim() ? info.brand.companyName.trim() : null,
+      tasks: readTasks(info.tasks),
+    };
+  } catch {
+    return undefined;
+  }
+};
+
+/** The tasks of the meet's view or of the hub's `TasksChanged`, leaving out what is not a task. */
+export const readTasks = (value: unknown): TaskSummary[] =>
+  (Array.isArray(value) ? value : []).flatMap((p: { id?: unknown; order?: unknown; title?: unknown; state?: unknown }) =>
+    typeof p?.id === "string" && typeof p.order === "number" && (p.state === "Pending" || p.state === "Current" || p.state === "Done")
+      ? [{ id: p.id, order: p.order, title: typeof p.title === "string" ? p.title : null, state: p.state }]
+      : [],
+  );
+
+/**
+ * The task's brief for this participant (`GET /v1/meetings/{code}/tasks/{taskId}/content`): its description and the
+ * goals the interviewer revealed. The server leaves out what only the interviewers see. Undefined when it cannot be
+ * read.
+ */
+export const taskContentAsync = async (
+  server: string,
+  code: string,
+  taskId: string,
+  token: string,
+  fetchImpl: Fetch = fetch,
+): Promise<TaskContent | undefined> => {
+  try {
+    const url = `${server}/v1/meetings/${encodeURIComponent(code)}/tasks/${encodeURIComponent(taskId)}/content`;
+    const response = await fetchImpl(url, { method: "GET", headers: { Accept: "application/json", Authorization: `Bearer ${token}` } });
+    if (!response.ok) {
+      return undefined;
+    }
+    const content = (await response.json()) as { title?: unknown; description?: unknown; items?: unknown };
+    const items = (Array.isArray(content.items) ? content.items : []).flatMap(
+      (p: { index?: unknown; text?: unknown; isRevealed?: unknown }) =>
+        typeof p?.index === "number" && typeof p.text === "string" ? [{ index: p.index, text: p.text, isRevealed: p.isRevealed === true }] : [],
+    );
+    return {
+      taskId,
+      title: typeof content.title === "string" ? content.title : null,
+      description: typeof content.description === "string" ? content.description : null,
+      items,
     };
   } catch {
     return undefined;

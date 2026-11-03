@@ -2,17 +2,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import {
-  enterAsync,
-  EntryError,
-  isTrustedServer,
-  MeetingEntry,
-  MeetSummary,
-  meetSummaryAsync,
-  parseJoinLink,
-  parseMeet,
-  serverOrigin,
-} from "./api";
+import { enterAsync, EntryError, isTrustedServer, MeetingEntry, parseJoinLink, parseMeet, serverOrigin } from "./api";
+import { TaskBrief } from "./brief";
 import { meetPageUrl } from "./execution";
 import { Manifest } from "./mirror";
 import { RemotePerson } from "./presence";
@@ -20,12 +11,16 @@ import { LocalRunner } from "./localRunner";
 import { MeetPanel } from "./meetPanel";
 import { PanelButton, PanelModel } from "./panel";
 import { MeetRuns } from "./runs";
-import { MeetPlace, MeetSession, SessionState } from "./session";
+import { MeetPlace, MeetSession, SessionState, StoredTasks } from "./session";
+import { taskNumberOf, TaskSummary } from "./tasks";
 
 /** What the extension remembers of a meet folder, so the window that opens it joins again. */
 interface StoredMeet {
   place: MeetPlace;
+  /** The meet's files in its own folder, from before each task had a folder of its own (V23). */
   manifest: Manifest;
+  /** Each task's folder and the meet's files it holds. */
+  tasks?: StoredTasks;
 }
 
 const MEETS_KEY = "rallybeam.meets";
@@ -35,8 +30,8 @@ let statusBar: vscode.StatusBarItem;
 let output: vscode.OutputChannel;
 let extensionContext: vscode.ExtensionContext;
 let panel: MeetPanel;
+let brief: TaskBrief;
 let sessionState: SessionState = "connecting";
-let summary: MeetSummary | undefined;
 
 const WELCOMED_KEY = "rallybeam.welcomed";
 
@@ -46,9 +41,11 @@ export const activate = (context: vscode.ExtensionContext) => {
   statusBar.command = "rallybeam.menu";
   output = vscode.window.createOutputChannel("Rallybeam");
   panel = new MeetPanel(panelModel);
+  brief = new TaskBrief(() => session?.loadBriefAsync() ?? Promise.resolve(undefined));
   context.subscriptions.push(
     statusBar,
     output,
+    brief,
     { dispose: () => session?.dispose() },
     vscode.commands.registerCommand("rallybeam.join", () => joinByCodeAsync(context)),
     vscode.commands.registerCommand("rallybeam.leave", () => leaveAsync(context)),
@@ -61,6 +58,8 @@ export const activate = (context: vscode.ExtensionContext) => {
     vscode.commands.registerCommand("rallybeam.stopRun", () => withRunsAsync((runs) => runs.stopRunAsync())),
     vscode.commands.registerCommand("rallybeam.restartApp", () => withRunsAsync((runs) => runs.restartAppAsync())),
     vscode.commands.registerCommand("rallybeam.openMeet", openMeetAsync),
+    vscode.commands.registerCommand("rallybeam.showBrief", showBriefAsync),
+    vscode.commands.registerCommand("rallybeam.follow", followAsync),
     vscode.commands.registerCommand("rallybeam.useHere", () => resumeAsync(context)),
     vscode.commands.registerCommand("rallybeam.menu", () => showMenuAsync(context)),
     vscode.window.registerUriHandler({ handleUri: (uri) => joinByLinkAsync(context, uri) }),
@@ -141,6 +140,7 @@ const enterAndOpenAsync = async (
   meets[folder.fsPath] = {
     place: { server, code: entry.code, participant: entry.participant },
     manifest: previous?.place.code === entry.code ? previous.manifest : {},
+    tasks: previous?.place.code === entry.code ? previous.tasks : undefined,
   };
   await context.globalState.update(MEETS_KEY, meets);
   await context.secrets.store(tokenKey(folder), entry.token);
@@ -163,11 +163,13 @@ const resumeAsync = async (context: vscode.ExtensionContext) => {
   }
 
   session?.dispose();
-  summary = undefined;
-  const saveManifest = (manifest: Manifest) => {
+  // A meet joined before each task had a folder of its own keeps its files where they are, as the meet's own folder.
+  const tasks: StoredTasks =
+    stored.tasks ?? (Object.keys(stored.manifest).length > 0 ? { "": { folder: "", manifest: stored.manifest } } : {});
+  const saveTasks = (value: StoredTasks) => {
     const meets = storedMeets(context);
     if (meets[folder.fsPath]) {
-      meets[folder.fsPath] = { ...meets[folder.fsPath], manifest };
+      meets[folder.fsPath] = { ...meets[folder.fsPath], tasks: value };
       void context.globalState.update(MEETS_KEY, meets);
     }
   };
@@ -175,19 +177,14 @@ const resumeAsync = async (context: vscode.ExtensionContext) => {
     stored.place,
     token,
     folder,
-    stored.manifest,
-    saveManifest,
+    tasks,
+    saveTasks,
     (state) => showState(stored.place, state),
     output,
+    (task) => void onTaskSwitchedAsync(task),
+    () => void brief.onChangedAsync(),
   );
   showState(stored.place, "connecting");
-  const current = session;
-  void meetSummaryAsync(stored.place.server, stored.place.code).then((found) => {
-    if (session === current) {
-      summary = found;
-      panel.refresh();
-    }
-  });
   try {
     await session.startAsync();
   } catch (error) {
@@ -214,6 +211,47 @@ const openMeetAsync = async () => {
     return;
   }
   await vscode.env.openExternal(vscode.Uri.parse(meetPageUrl(session.place.server, session.place.code)));
+};
+
+// The current task's brief, beside the code.
+const showBriefAsync = async () => {
+  if (!session?.currentTask) {
+    void vscode.window.showInformationMessage(vscode.l10n.t("The task's brief shows once the interviewer opens the workspace."));
+    return;
+  }
+  await brief.showAsync();
+};
+
+// Follows someone's file and cursor, or stops following.
+const followAsync = async () => {
+  const people = session?.people;
+  if (!people) {
+    void vscode.window.showInformationMessage(vscode.l10n.t("You are not in a Rallybeam meet in this window."));
+  } else if (people.following) {
+    people.stopFollowing();
+  } else {
+    await people.followAsync();
+  }
+};
+
+// The interviewer moved to another task: where its files are, and its brief.
+const onTaskSwitchedAsync = async (task: TaskSummary) => {
+  if (!session) {
+    return;
+  }
+  const open = vscode.l10n.t("Open the brief");
+  const answer = await vscode.window.showInformationMessage(
+    vscode.l10n.t(
+      "The interviewer moved to task {0} of {1}: {2}. Its files are in a folder of their own; the earlier tasks' folders stay as they were, read-only.",
+      taskNumberOf(session.tasks, task.id),
+      session.tasks.length,
+      task.title ?? vscode.l10n.t("Untitled"),
+    ),
+    open,
+  );
+  if (answer === open) {
+    await showBriefAsync();
+  }
 };
 
 // Run and Run tests on this computer, once the code is here.
@@ -313,7 +351,6 @@ const leaveAsync = async (context: vscode.ExtensionContext) => {
   setContext("rallybeam.inMeet", false);
   setContext("rallybeam.canRun", false);
   setContext("rallybeam.canRunLocally", false);
-  summary = undefined;
   panel.refresh();
   if (folder) {
     const meets = storedMeets(context);
@@ -358,7 +395,8 @@ const showState = (place: MeetPlace, state: SessionState) => {
   }
 };
 
-// The Rallybeam panel: the meet on top, then the runs everyone sees, the runs on this computer, and the rest.
+// The Rallybeam panel: the meet on top, then its task and brief, the runs everyone sees, the runs on this computer, and
+// the rest.
 const panelModel = (): PanelModel => {
   if (!session) {
     return {
@@ -369,7 +407,7 @@ const panelModel = (): PanelModel => {
       sections: [{ buttons: [{ command: "rallybeam.join", label: vscode.l10n.t("Join meet"), icon: "signIn", isPrimary: true }] }],
     };
   }
-  const { runs, local, packages, people } = session;
+  const { runs, local, packages, people, summary, tasks, currentTask } = session;
   const code = session.place.code;
   const statuses: Record<SessionState, string | undefined> = {
     connecting: vscode.l10n.t("Connecting to the meet…"),
@@ -405,7 +443,12 @@ const panelModel = (): PanelModel => {
   }
   const others: PanelButton[] = [{ command: "rallybeam.openMeet", label: vscode.l10n.t("Open the meet in your browser"), icon: "browser" }];
   if (isOpen && people) {
-    others.push({ command: "rallybeam.goToCursor", label: vscode.l10n.t("Go to someone's cursor"), icon: "person" });
+    others.push(
+      { command: "rallybeam.goToCursor", label: vscode.l10n.t("Go to someone's cursor"), icon: "person" },
+      people.following
+        ? { command: "rallybeam.follow", label: vscode.l10n.t("Stop following {0}", people.following.user.name), icon: "follow" }
+        : { command: "rallybeam.follow", label: vscode.l10n.t("Follow someone"), icon: "follow" },
+    );
   }
   others.push({ command: "rallybeam.leave", label: vscode.l10n.t("Leave meet"), icon: "signOut" });
   return {
@@ -419,6 +462,14 @@ const panelModel = (): PanelModel => {
           sessionState === "moved"
             ? [{ command: "rallybeam.useHere", label: vscode.l10n.t("Use here"), icon: "signIn", isPrimary: true }]
             : [],
+      },
+      {
+        heading:
+          tasks.length > 1 && currentTask
+            ? vscode.l10n.t("Task {0} of {1}", taskNumberOf(tasks, currentTask.id), tasks.length)
+            : vscode.l10n.t("The task"),
+        note: currentTask?.title ?? undefined,
+        buttons: isOpen && currentTask ? [{ command: "rallybeam.showBrief", label: vscode.l10n.t("Open the brief"), icon: "brief" }] : [],
       },
       {
         heading: vscode.l10n.t("In Rallybeam"),

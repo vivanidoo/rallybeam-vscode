@@ -104,6 +104,16 @@
         "category": "Rallybeam"
       },
       {
+        "command": "rallybeam.showBrief",
+        "title": "Open the task's brief",
+        "category": "Rallybeam"
+      },
+      {
+        "command": "rallybeam.follow",
+        "title": "Follow someone, or stop following",
+        "category": "Rallybeam"
+      },
+      {
         "command": "rallybeam.useHere",
         "title": "Use the meet in this window",
         "category": "Rallybeam"

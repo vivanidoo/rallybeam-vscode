@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { enterAsync, EntryError, Fetch, isTrustedServer, meetSummaryAsync, parseJoinLink, parseMeet } from "../src/api";
+import { enterAsync, EntryError, Fetch, isTrustedServer, meetSummaryAsync, parseJoinLink, parseMeet, taskContentAsync } from "../src/api";
 
 const respond = (status: number, body: unknown): Fetch =>
   vi.fn(() => Promise.resolve({ ok: status >= 200 && status < 300, status, json: () => Promise.resolve(body) }));
@@ -35,11 +35,24 @@ describe("enterAsync", () => {
 
 describe("meetSummaryAsync", () => {
   it("reads the meet's title and the company of its brand", async () => {
-    const fetchImpl = respond(200, { code: "abcd1234", title: " Frontend interview ", brand: { companyName: "VUJANIĆ TEHNOMETAL" } });
+    const fetchImpl = respond(200, {
+      code: "abcd1234",
+      title: " Frontend interview ",
+      brand: { companyName: "VUJANIĆ TEHNOMETAL" },
+      tasks: [
+        { id: "t2", order: 1, title: "React counter", state: "Pending", parts: [] },
+        { id: "t1", order: 0, title: "Two sum", state: "Current", parts: [] },
+        { id: 7, order: 2, state: "Pending" },
+      ],
+    });
 
     expect(await meetSummaryAsync("https://int.rallybeam.com", "abcd1234", fetchImpl)).toEqual({
       title: "Frontend interview",
       companyName: "VUJANIĆ TEHNOMETAL",
+      tasks: [
+        { id: "t2", order: 1, title: "React counter", state: "Pending" },
+        { id: "t1", order: 0, title: "Two sum", state: "Current" },
+      ],
     });
     expect(fetchImpl).toHaveBeenCalledWith("https://int.rallybeam.com/v1/meetings/abcd1234", {
       method: "GET",
@@ -51,9 +64,44 @@ describe("meetSummaryAsync", () => {
     expect(await meetSummaryAsync("https://app.rallybeam.com", "abcd1234", respond(200, { title: null, brand: null }))).toEqual({
       title: null,
       companyName: null,
+      tasks: [],
     });
     expect(await meetSummaryAsync("https://app.rallybeam.com", "abcd1234", respond(404, {}))).toBeUndefined();
     expect(await meetSummaryAsync("https://app.rallybeam.com", "abcd1234", () => Promise.reject(new Error("offline")))).toBeUndefined();
+  });
+});
+
+describe("taskContentAsync", () => {
+  it("reads the task's brief with the participant's token", async () => {
+    const fetchImpl = respond(200, {
+      taskId: "t1",
+      title: "Two sum",
+      description: "Find **two** numbers.",
+      items: [
+        { index: 0, text: "Handle duplicates", isRevealed: true },
+        { index: 1, text: "", isRevealed: false },
+      ],
+      interviewerNotes: null,
+      isStaff: false,
+    });
+
+    expect(await taskContentAsync("https://int.rallybeam.com", "abcd1234", "t1", "jwt", fetchImpl)).toEqual({
+      taskId: "t1",
+      title: "Two sum",
+      description: "Find **two** numbers.",
+      items: [
+        { index: 0, text: "Handle duplicates", isRevealed: true },
+        { index: 1, text: "", isRevealed: false },
+      ],
+    });
+    expect(fetchImpl).toHaveBeenCalledWith("https://int.rallybeam.com/v1/meetings/abcd1234/tasks/t1/content", {
+      method: "GET",
+      headers: { Accept: "application/json", Authorization: "Bearer jwt" },
+    });
+  });
+
+  it("gives nothing when the brief cannot be read", async () => {
+    expect(await taskContentAsync("https://app.rallybeam.com", "abcd1234", "t1", "jwt", respond(404, {}))).toBeUndefined();
   });
 });
 

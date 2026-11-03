@@ -46,6 +46,8 @@ export class FolderMirror implements vscode.Disposable {
 
   constructor(
     private readonly folder: vscode.Uri,
+    // The workspace's own folder, the meet's, whose settings VS Code reads; the task's folder is inside it.
+    private readonly settingsFolder: vscode.Uri,
     private readonly project: CodeProject,
     manifest: Manifest,
     private readonly saveManifest: (manifest: Manifest) => void,
@@ -363,12 +365,14 @@ export class FolderMirror implements vscode.Disposable {
     }
   };
 
-  // The meet folder saves on its own, so remote changes reach the disk, and uses LF, as the shared offsets need.
+  // The meet folder saves on its own, so remote changes reach the disk, and uses LF, as the shared offsets need. A
+  // value the candidate set in the folder is kept.
   private writeFolderSettings = async () => {
-    const uri = vscode.Uri.joinPath(this.folder, ".vscode", "settings.json");
-    if ((await this.readText(uri)) === undefined) {
-      const settings = { "files.autoSave": "afterDelay", "files.eol": "\n" };
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(`${JSON.stringify(settings, null, 2)}\n`, "utf8"));
+    const files = vscode.workspace.getConfiguration("files", this.settingsFolder);
+    for (const [key, value] of [["autoSave", "afterDelay"], ["eol", "\n"]] as const) {
+      if (files.inspect(key)?.workspaceValue === undefined) {
+        await files.update(key, value, vscode.ConfigurationTarget.Workspace).then(undefined, () => undefined);
+      }
     }
   };
 

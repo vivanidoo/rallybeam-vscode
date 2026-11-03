@@ -6,7 +6,8 @@ import { CodeProject } from "./project";
 
 /**
  * Who has which file in front, as the web's dots beside the files show it: a badge and the person's colour on the file
- * in VS Code's explorer, and a way to go to someone's cursor, from the status bar or the command palette.
+ * in VS Code's explorer, and a way to go to someone's cursor, from the status bar or the command palette. Following
+ * someone (V23) keeps their file and cursor in front here as they move, until this person clicks or types.
  */
 export class People implements vscode.FileDecorationProvider, vscode.Disposable {
   private readonly changed = new vscode.EventEmitter<undefined>();
@@ -18,11 +19,17 @@ export class People implements vscode.FileDecorationProvider, vscode.Disposable 
   // The files that had a badge, so a change to who is where repaints only when it matters.
   private lastShape = "";
 
+  /** The person this window follows, if any. */
+  public following: RemotePerson | undefined;
+
+  private isShowingFollowed = false;
+
   constructor(
     private readonly awareness: Awareness,
     private readonly project: CodeProject,
     private readonly idOf: (uri: vscode.Uri) => string | undefined,
     private readonly uriOf: (filePath: string) => vscode.Uri,
+    private readonly onFollowChanged: () => void,
   ) {}
 
   public start = () => {
@@ -31,7 +38,37 @@ export class People implements vscode.FileDecorationProvider, vscode.Disposable 
       vscode.window.registerFileDecorationProvider(this),
       { dispose: () => this.awareness.off("change", this.refresh) },
       { dispose: this.project.onShapeChanged(() => this.changed.fire(undefined)) },
+      // A click or a key here is this person working again: following stops, as in Live Share.
+      vscode.window.onDidChangeTextEditorSelection((event) => {
+        const byHand =
+          event.kind === vscode.TextEditorSelectionChangeKind.Mouse || event.kind === vscode.TextEditorSelectionChangeKind.Keyboard;
+        if (this.following && byHand) {
+          this.stopFollowing();
+        }
+      }),
     );
+  };
+
+  /** Follows someone: the one person in the meet, or the one picked. */
+  public followAsync = async (person?: RemotePerson) => {
+    const people = this.here();
+    const chosen = person ?? (people.length === 1 ? people[0] : await this.pickAsync(people));
+    if (!chosen) {
+      return;
+    }
+    this.following = chosen;
+    this.onFollowChanged();
+    await this.showFollowedAsync();
+    void vscode.window.showInformationMessage(
+      vscode.l10n.t("Following {0}: their file and cursor stay in front as they move. Click or type in the editor to stop.", chosen.user.name),
+    );
+  };
+
+  public stopFollowing = () => {
+    if (this.following) {
+      this.following = undefined;
+      this.onFollowChanged();
+    }
   };
 
   public dispose = () => {
@@ -105,7 +142,43 @@ export class People implements vscode.FileDecorationProvider, vscode.Disposable 
     return picked?.person;
   };
 
+  // Brings the followed person's file to the front and their cursor into view; following ends when they leave.
+  private showFollowedAsync = async () => {
+    const person = this.following;
+    if (!person || this.isShowingFollowed) {
+      return;
+    }
+    const now = this.here().find((p) => p.clientId === person.clientId);
+    if (!now) {
+      this.stopFollowing();
+      void vscode.window.showInformationMessage(vscode.l10n.t("{0} has no file of the meet open now, so you stopped following.", person.user.name));
+      return;
+    }
+    const file = this.project.mirroredFiles().find((p) => p.id === now.fileId);
+    if (!file) {
+      return;
+    }
+
+    this.isShowingFollowed = true;
+    try {
+      const uri = this.uriOf(file.path);
+      const active = vscode.window.activeTextEditor;
+      const editor =
+        active?.document.uri.toString() === uri.toString() ? active : await vscode.window.showTextDocument(uri, { preview: true });
+      const cursor = remoteCursorsIn(this.awareness, file.id, file.text).find((p) => p.clientId === person.clientId);
+      if (cursor && this.following === person) {
+        const position = editor.document.positionAt(cursor.head);
+        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+      }
+    } finally {
+      this.isShowingFollowed = false;
+    }
+  };
+
   private refresh = () => {
+    if (this.following) {
+      void this.showFollowedAsync();
+    }
     const shape = this.here()
       .map((p) => `${p.fileId}:${p.clientId}:${p.user.name}:${p.user.color}`)
       .join("|");

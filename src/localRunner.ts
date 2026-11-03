@@ -21,7 +21,10 @@ export class LocalRunner implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
+    // The task's folder, where the runs start.
     private readonly folder: vscode.Uri,
+    // The folder with the packages, above the meet's (environments.ts).
+    private readonly packagesRoot: string,
     private readonly project: CodeProject,
     private readonly packages: PackageSetup,
   ) {
@@ -116,7 +119,7 @@ export class LocalRunner implements vscode.Disposable {
     const type = this.project.language;
     const mainId = this.project.meta.get(`mainFile:${type}`);
     const main = (mainId ? this.project.fileOf(mainId)?.path : undefined) ?? localRunFor(type)?.defaultMain ?? "index.js";
-    return localPaths(path.dirname(this.folder.fsPath), type, main);
+    return localPaths(this.packagesRoot, type, main);
   };
 
   private startAsync = async (kind: "run" | "test", name: string, args: string[], env?: Record<string, string>) => {

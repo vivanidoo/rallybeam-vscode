@@ -1,6 +1,6 @@
 /**
  * The Rallybeam panel's page (V21): the meet on top (the inviting company, the meet's title and code), then its
- * actions in sections with a line between them, Rallybeam's first. A webview, as VS Code's welcome content shows no
+ * actions in sections with a line between them: the task and its brief (V23), Rallybeam's runs, then this computer's. A webview, as VS Code's welcome content shows no
  * text that changes and no lines. The page only posts which button was clicked; the extension runs the command, and
  * only one of PANEL_COMMANDS.
  */
@@ -13,6 +13,8 @@ export const PANEL_COMMANDS = [
   "rallybeam.testLocal",
   "rallybeam.setUpPackages",
   "rallybeam.goToCursor",
+  "rallybeam.follow",
+  "rallybeam.showBrief",
   "rallybeam.openMeet",
   "rallybeam.useHere",
   "rallybeam.leave",
@@ -23,7 +25,18 @@ export type PanelCommand = (typeof PANEL_COMMANDS)[number];
 export const isPanelCommand = (value: unknown): value is PanelCommand =>
   typeof value === "string" && (PANEL_COMMANDS as readonly string[]).includes(value);
 
-export type PanelIcon = "play" | "beaker" | "preview" | "restart" | "package" | "person" | "browser" | "signIn" | "signOut";
+export type PanelIcon =
+  | "play"
+  | "beaker"
+  | "preview"
+  | "restart"
+  | "package"
+  | "person"
+  | "follow"
+  | "brief"
+  | "browser"
+  | "signIn"
+  | "signOut";
 
 export interface PanelButton {
   command: PanelCommand;
@@ -68,6 +81,8 @@ const ICONS: Record<PanelIcon, string> = {
   restart: '<path d="M13 8a5 5 0 1 1-1.5-3.5M13 2.5v3h-3"/>',
   package: '<path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8zM2.5 4.8 8 7.8l5.5-3M8 7.8v6.4"/>',
   person: '<circle cx="8" cy="5" r="2.6"/><path d="M2.8 14c0-2.9 2.3-4.6 5.2-4.6s5.2 1.7 5.2 4.6"/>',
+  follow: '<path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>',
+  brief: '<path d="M4 1.8h5.5L12.5 5v9.2H4zM9.5 1.8V5h3M6 8h4.5M6 10.5h4.5"/>',
   browser: '<path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M12 9.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3"/>',
   signIn: '<path d="M10 2.5h2.5a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10M6 5l3 3-3 3M9 8H2"/>',
   signOut: '<path d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10 5l3 3-3 3M13 8H6"/>',
