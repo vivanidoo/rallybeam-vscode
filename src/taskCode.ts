@@ -16,6 +16,9 @@ import type { MeetPlace } from "./session";
 /** The subprotocol the API's Yjs relay expects next to the participant token. */
 export const RELAY_SUBPROTOCOL = "rallybeam";
 
+/** The relay's close code for a socket whose task is no longer the current one. */
+const TASK_CHANGED = 4409;
+
 /**
  * One task's code (V23): its document on the relay, which serves the task current when the socket opens, mirrored to
  * the task's own folder, with everyone's cursors, the packages for the editor and the runs on this computer. A task
@@ -78,6 +81,8 @@ export class TaskCode implements vscode.Disposable {
       protocols: [RELAY_SUBPROTOCOL, this.token],
       WebSocketPolyfill: WebSocket as unknown as typeof globalThis.WebSocket,
       disableBc: true,
+      // The relay refuses a socket that names a task no longer current (everest-api CanvasRelay.TASK_CHANGED).
+      ...(this.taskId ? { params: { task: this.taskId } } : {}),
     });
     provider.awareness.setLocalStateField("user", {
       name: this.place.participant.displayName,
@@ -127,6 +132,12 @@ export class TaskCode implements vscode.Disposable {
         }
       } else if (status === "connected" && provider.synced) {
         this.onStatus("connected");
+      }
+    });
+    // The relay refused the task as no longer current: the session reads the meet and moves to the current task.
+    provider.on("closed", ({ code }: { code: number }) => {
+      if (!this.isDisposed && code === TASK_CHANGED) {
+        this.onStatus("disconnected");
       }
     });
   };
