@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isPanelCommand, PanelModel, panelHtml } from "../src/panel";
+import { accentText, isPanelCommand, PanelModel, panelHtml } from "../src/panel";
 
 const page = { cspSource: "vscode-webview://abc", nonce: "n0nce" };
 
@@ -38,6 +38,46 @@ describe("the Rallybeam panel", () => {
     expect(html).toContain("default-src 'none'; style-src 'nonce-n0nce'; script-src 'nonce-n0nce'");
     expect(html).toContain(`<script nonce="n0nce">`);
     expect(html).not.toContain(`class="company"`);
+  });
+
+  it("draws a paying company's look: the header image, logo, welcome message, button colour and footer", () => {
+    const html = panelHtml(
+      {
+        ...model,
+        brand: {
+          logoUrl: "https://int.rallybeam.com/v1/tenants/t/logo?v=1",
+          headerUrl: "https://int.rallybeam.com/v1/tenants/t/editor-header?v=3",
+          accentColor: "#ea580c",
+          welcomeMessage: "Welcome <to> your interview.",
+          poweredBy: "Powered by Rallybeam",
+        },
+      },
+      page,
+    );
+
+    expect(html).toContain("img-src vscode-webview://abc https://int.rallybeam.com;");
+    expect(html).toContain(`<img class="cover" src="https://int.rallybeam.com/v1/tenants/t/editor-header?v=3" alt="">`);
+    expect(html).toContain(`<img class="logo" src="https://int.rallybeam.com/v1/tenants/t/logo?v=1" alt="">`);
+    expect(html).toContain(`<p class="welcome">Welcome &lt;to&gt; your interview.</p>`);
+    // Ink reads better than white on this orange, as on the web.
+    expect(html).toContain("button.primary { background: #ea580c; color: #17252b;");
+    expect(html).toContain("<footer>Powered by Rallybeam</footer>");
+  });
+
+  it("keeps a branded panel without an image or colour in the editor's own colours", () => {
+    const html = panelHtml({ ...model, brand: { poweredBy: "Powered by Rallybeam" } }, page);
+
+    expect(html).not.toContain(`class="cover"`);
+    expect(html).not.toContain("button.primary { background: #");
+    expect(html).toContain("img-src vscode-webview://abc;");
+    expect(html).toContain("<footer>Powered by Rallybeam</footer>");
+  });
+
+  it("puts ink on a light button colour and drops a colour that is not #rrggbb", () => {
+    expect(accentText("#fde047")).toBe("#17252b");
+    expect(accentText("#1f2937")).toBe("#ffffff");
+    const html = panelHtml({ ...model, brand: { accentColor: "red;}body{display:none", poweredBy: "Powered by Rallybeam" } }, page);
+    expect(html).not.toContain("display:none");
   });
 
   it("takes only its own commands from the page", () => {

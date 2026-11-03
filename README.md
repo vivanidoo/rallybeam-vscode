@@ -50,6 +50,8 @@ folder inside it, such as `1-two-sum` and `2-react-counter`. They stay after the
 Everything is in the **Rallybeam** panel, the Rallybeam icon in VS Code's left bar: on top the meet (the inviting
 company, when the meet carries its brand, and the meet's title and code), then the task, such as "Task 2 of 3", with
 **Open the brief**, then its actions in this order, which the menu of the status bar's "Rallybeam" item follows too. The editor's title bar has ▶ and the beaker as well.
+When the inviting company has set up its branding, the top of the panel shows its header image, logo and welcome
+message, and the main buttons take its colour. The images come only from the meet's Rallybeam server.
 
 **In Rallybeam:** **Run** and **Run tests** there run the meet's code in its sandbox, as the web's **Run** does, so
 the interviewer sees every run you start and you see theirs:

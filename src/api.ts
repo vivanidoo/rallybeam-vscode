@@ -63,10 +63,24 @@ export const enterAsync = async (
   return (await response.json()) as MeetingEntry;
 };
 
+/**
+ * The inviting company's look in the panel (V24): its logo, the header image (the company's own for VS Code, else its
+ * call background) as addresses on the meet's server, its button colour and its welcome message.
+ */
+export interface MeetBrand {
+  logoUrl: string | null;
+  headerUrl: string | null;
+  /** `#rrggbb`. */
+  accentColor: string | null;
+  welcomeMessage: string | null;
+}
+
 /** What the meet's page shows on top: its title and the inviting company, from what anyone with the link may know. */
 export interface MeetSummary {
   title: string | null;
   companyName: string | null;
+  /** The company's look; `null` when the meet carries no brand. */
+  brand: MeetBrand | null;
   /** The meet's tasks, with which one is current; their titles only. */
   tasks: TaskSummary[];
 }
@@ -84,16 +98,39 @@ export const meetSummaryAsync = async (server: string, code: string, fetchImpl: 
     if (!response.ok) {
       return undefined;
     }
-    const info = (await response.json()) as { title?: unknown; brand?: { companyName?: unknown } | null; tasks?: unknown };
+    const info = (await response.json()) as { title?: unknown; brand?: BrandView | null; tasks?: unknown };
+    const companyName = typeof info.brand?.companyName === "string" && info.brand.companyName.trim() ? info.brand.companyName.trim() : null;
     return {
       title: typeof info.title === "string" && info.title.trim() ? info.title.trim() : null,
-      companyName: typeof info.brand?.companyName === "string" && info.brand.companyName.trim() ? info.brand.companyName.trim() : null,
+      companyName,
+      brand: companyName && info.brand ? readBrand(server, info.brand) : null,
       tasks: readTasks(info.tasks),
     };
   } catch {
     return undefined;
   }
 };
+
+/** The meet view's `brand`, as far as the panel uses it. */
+interface BrandView {
+  companyName?: unknown;
+  logoUrl?: unknown;
+  accentColor?: unknown;
+  welcomeMessage?: unknown;
+  backgroundUrl?: unknown;
+  editorHeaderUrl?: unknown;
+}
+
+/** An image of the brand: a path on the meet's own server, never an address elsewhere. */
+const serverImage = (server: string, path: unknown): string | null =>
+  typeof path === "string" && path.startsWith("/") && !path.startsWith("//") ? `${server}${path}` : null;
+
+const readBrand = (server: string, brand: BrandView): MeetBrand => ({
+  logoUrl: serverImage(server, brand.logoUrl),
+  headerUrl: serverImage(server, brand.editorHeaderUrl) ?? serverImage(server, brand.backgroundUrl),
+  accentColor: typeof brand.accentColor === "string" && /^#[0-9a-fA-F]{6}$/.test(brand.accentColor) ? brand.accentColor.toLowerCase() : null,
+  welcomeMessage: typeof brand.welcomeMessage === "string" && brand.welcomeMessage.trim() ? brand.welcomeMessage.trim() : null,
+});
 
 /** The tasks of the meet's view or of the hub's `TasksChanged`, leaving out what is not a task. */
 export const readTasks = (value: unknown): TaskSummary[] =>
