@@ -30,6 +30,8 @@ workspace, and the code arrives when they do. Click the status bar to go to some
 Each meet gets its own folder, `~/Rallybeam/<meet code>` (setting `rallybeam.folder`), and each of its tasks a
 folder inside it, such as `1-two-sum` and `2-react-counter`. They stay after the meet.
 
+- When you join, the current task's main file opens, with its folder open in the explorer. A folder VS Code reopens
+  keeps the editors you had.
 - The current task's folder is live. When the interviewer moves to another task, its folder fills with that task's
   files and its main file opens; the earlier task's folder stays as it was left, read-only, as its editors close.
   Going back to a task makes its folder live again, with that task's files as the meet has them.
@@ -41,7 +43,9 @@ folder inside it, such as `1-two-sum` and `2-react-counter`. They stay after the
 - A meet file changed on disk by a tool, such as a formatter or `git checkout`, sends its new text. A meet file
   removed from the terminal comes back.
 - The folder's `.vscode/settings.json` turns on auto save and LF line endings, so the disk follows the meet, and makes
-  the earlier tasks' folders read-only.
+  the earlier tasks' folders read-only. It also hides `.vscode` from the explorer (`files.exclude`), since it holds
+  only these settings and never reaches the meet; open the file with **Preferences: Open Workspace Settings (JSON)**,
+  or set `".vscode": false` there to show the folder again.
 - VS Code's undo also takes back changes that arrived from others.
 - What you run in your terminal stays on your machine. **Run in Rallybeam** (below) runs the shared code for everyone.
 

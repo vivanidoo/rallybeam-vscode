@@ -2,6 +2,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import * as Y from "yjs";
 
+import { withSettingsHidden } from "./folderView";
 import { CodeProject, isInFolder, PathProblem, ProjectFile } from "./project";
 import { applyChanges, diffTexts, replaceText, toLf } from "./textDiff";
 
@@ -365,14 +366,18 @@ export class FolderMirror implements vscode.Disposable {
     }
   };
 
-  // The meet folder saves on its own, so remote changes reach the disk, and uses LF, as the shared offsets need. A
-  // value the candidate set in the folder is kept.
+  // The meet folder saves on its own, so remote changes reach the disk, and uses LF, as the shared offsets need. Its
+  // Explorer hides `.vscode`, which holds only these settings. A value the candidate set in the folder is kept.
   private writeFolderSettings = async () => {
     const files = vscode.workspace.getConfiguration("files", this.settingsFolder);
     for (const [key, value] of [["autoSave", "afterDelay"], ["eol", "\n"]] as const) {
       if (files.inspect(key)?.workspaceValue === undefined) {
         await files.update(key, value, vscode.ConfigurationTarget.Workspace).then(undefined, () => undefined);
       }
+    }
+    const exclude = withSettingsHidden(files.inspect<Record<string, boolean>>("exclude")?.workspaceValue);
+    if (exclude) {
+      await files.update("exclude", exclude, vscode.ConfigurationTarget.Workspace).then(undefined, () => undefined);
     }
   };
 

@@ -2,6 +2,7 @@ import { HubConnection, HubConnectionBuilder, LogLevel } from "@microsoft/signal
 import * as vscode from "vscode";
 
 import { MeetSummary, meetSummaryAsync, ParticipantView, readTasks, taskContentAsync } from "./api";
+import { hasOpenFileIn } from "./folderView";
 import { LocalRunner } from "./localRunner";
 import { Manifest } from "./mirror";
 import { PackageSetup } from "./packageSetup";
@@ -202,6 +203,21 @@ export class MeetSession implements vscode.Disposable {
       this.runs.start();
     }
     await this.openTaskAsync(currentTaskOf(this.tasks));
+    // openTaskAsync made the task's code. Waiting for it outside the queue keeps the meet's other changes moving.
+    const code = this.code as TaskCode | undefined;
+    void code?.ready.then(() => this.showMainFileOnJoinAsync(code));
+  };
+
+  // On joining, the task's main file comes in front, and the Explorer opens its folder to it, unless VS Code brought
+  // back editors of the task when the folder reopened.
+  private showMainFileOnJoinAsync = async (code: TaskCode) => {
+    if (this.isDisposed || this.code !== code || hasOpenFileIn(openTabUris(), code.folder.toString())) {
+      return;
+    }
+    const main = code.mainFileUri();
+    if (main) {
+      await vscode.window.showTextDocument(main, { preview: false }).then(undefined, () => undefined);
+    }
   };
 
   // The interviewer moved to another task: the old task's code is left, and the new task's comes in front.
@@ -328,6 +344,12 @@ export class MeetSession implements vscode.Disposable {
     this.onState(state);
   };
 }
+
+// The files the open tabs show.
+const openTabUris = (): string[] =>
+  vscode.window.tabGroups.all.flatMap((group) =>
+    group.tabs.flatMap((tab) => (tab.input instanceof vscode.TabInputText ? [tab.input.uri.toString()] : [])),
+  );
 
 // Closes the old task's editors, which would otherwise look live; the meet's own folder is never closed whole.
 const closeEditorsIn = async (taskFolder: vscode.Uri, meetFolder: vscode.Uri) => {
