@@ -130,6 +130,18 @@ published by the **Release** workflow, to the VS Code Marketplace and to Open VS
 through trusted publishing (GitHub's OIDC identity for this workflow; no store token is kept), each once its
 repository variable, `MARKETPLACE_TRUSTED_PUBLISHING` or `OPEN_VSX_TRUSTED_PUBLISHING`, is `true`.
 
+To release, merge a version bump into `main`, then start **Release** for `main` from your terminal (it needs the
+[GitHub CLI](https://cli.github.com), signed in with `gh auth login`):
+
+```bash
+npm run release       # a stable release of main's version
+npm run release:pre   # a pre-release of main's version
+gh run watch          # follow the run
+```
+
+In Claude Code, the `release` skill does all of it: it bumps the version, adds the changelog entry, opens the pull
+request, and after you say so merges it, starts the run and checks both stores.
+
 A version is published once, and a pre-release and a stable release cannot share one, so give each release its own
 `version` in `package.json` (an odd minor for pre-releases and an even minor for stable releases, such as `0.1.0` then
 `0.2.0`) and describe it in [CHANGELOG.md](CHANGELOG.md). If a store fails, run **Release** again for the same commit:

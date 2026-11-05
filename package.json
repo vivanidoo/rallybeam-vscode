@@ -283,7 +283,9 @@
     "test": "vitest run",
     "check": "tsc --noEmit && vitest run && node esbuild.mjs && node scripts/checkBundle.mjs",
     "package": "node scripts/notices.mjs && node esbuild.mjs --production && node scripts/checkBundle.mjs && vsce package --no-dependencies",
-    "notices": "node scripts/notices.mjs"
+    "notices": "node scripts/notices.mjs",
+    "release": "gh workflow run release.yml --ref main -f pre-release=false && echo Release started for main. Follow it with: gh run watch",
+    "release:pre": "gh workflow run release.yml --ref main -f pre-release=true && echo Pre-release started for main. Follow it with: gh run watch"
   },
   "dependencies": {
     "@microsoft/signalr": "^10.0.0",
