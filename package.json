@@ -2,7 +2,7 @@
   "name": "rallybeam",
   "displayName": "Rallybeam",
   "description": "Code in your own editor during a Rallybeam meet: the meet's code as a folder on your disk, live, with everyone's cursor.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vivani",
   "license": "MIT",
   "icon": "media/icon.png",
