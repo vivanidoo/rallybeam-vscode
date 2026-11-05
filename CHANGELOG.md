@@ -2,6 +2,13 @@
 
 All notable changes to the Rallybeam extension. The VS Code Marketplace shows this file on the extension's page.
 
+## 0.2.1
+
+- **Joining opens the task.** When you join a meet, the current task's main file opens, with its folder open in the
+  explorer. A folder VS Code reopens keeps the editors you had.
+- The explorer hides the meet folder's `.vscode`, which holds only the settings Rallybeam writes for the folder. To show
+  it again, set `".vscode": false` under `files.exclude` in the folder's settings.
+
 ## 0.2.0
 
 The first stable release. The extension's code is the same as in 0.1.0; this version exists so that **Install** works
