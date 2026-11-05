@@ -6,6 +6,10 @@ name: Release
 # Both stores take it through trusted publishing: GitHub vouches for this workflow (OIDC) and the store's trusted
 # publisher entry for it accepts that, so no store token is stored. Each store is skipped until its repository variable,
 # MARKETPLACE_TRUSTED_PUBLISHING or OPEN_VSX_TRUSTED_PUBLISHING, is "true", set once its entry exists.
+#
+# Safe to run again for the same version and commit, for example after one store failed: the GitHub release is kept
+# (its file is replaced), and a store that already has the version is skipped. A release that exists for another commit
+# stops the run, because a version is published once; bump the version in package.json.
 on:
   workflow_dispatch:
     inputs:
@@ -59,8 +63,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
         run: |
-          gh release create "v$VERSION" rallybeam.vsix --repo "$GITHUB_REPOSITORY" --title "v$VERSION" \
-            --generate-notes --target "$GITHUB_SHA" ${{ inputs.pre-release && '--prerelease' || '' }}
+          TAG="v$VERSION"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            TAG_SHA=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)
+            if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+              echo "::error::Release $TAG already exists for commit $TAG_SHA, not $GITHUB_SHA. Bump the version in package.json, or delete the release and its tag first."
+              exit 1
+            fi
+            gh release upload "$TAG" rallybeam.vsix --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" rallybeam.vsix --repo "$GITHUB_REPOSITORY" --title "$TAG" \
+              --generate-notes --target "$GITHUB_SHA" ${{ inputs.pre-release && '--prerelease' || '' }}
+          fi
 
   # Only this job may ask GitHub for the identity the Marketplace trusts, and it runs nothing of the project's own
   # dependencies: just the built file and the publishing tool, at a fixed version.
@@ -78,7 +92,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: rallybeam-vsix
-      - run: npx --yes @vscode/vsce@4.1.0 publish --oidc --no-dependencies --packagePath rallybeam.vsix $PRE_RELEASE
+      - run: npx --yes @vscode/vsce@4.1.0 publish --oidc --no-dependencies --skip-duplicate --packagePath rallybeam.vsix $PRE_RELEASE
 
   # The same for Open VSX, whose namespace owner registers this workflow as a trusted publisher.
   open-vsx:
@@ -95,4 +109,4 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: rallybeam-vsix
-      - run: npx --yes ovsx@1.3.0 publish rallybeam.vsix --trusted-publishing $PRE_RELEASE
+      - run: npx --yes ovsx@1.3.0 publish rallybeam.vsix --trusted-publishing --skip-duplicate $PRE_RELEASE
