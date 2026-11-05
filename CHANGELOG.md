@@ -2,6 +2,11 @@
 
 All notable changes to the Rallybeam extension. The VS Code Marketplace shows this file on the extension's page.
 
+## 0.2.0
+
+The first stable release. The extension's code is the same as in 0.1.0; this version exists so that **Install** works
+without choosing a pre-release. If you installed 0.1.0, you are moved to 0.2.0 by the next update.
+
 ## 0.1.0
 
 The first public release, published as a pre-release.
