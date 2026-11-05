@@ -130,6 +130,12 @@ published by the **Release** workflow, to the VS Code Marketplace and to Open VS
 through trusted publishing (GitHub's OIDC identity for this workflow; no store token is kept), each once its
 repository variable, `MARKETPLACE_TRUSTED_PUBLISHING` or `OPEN_VSX_TRUSTED_PUBLISHING`, is `true`.
 
+A version is published once, and a pre-release and a stable release cannot share one, so give each release its own
+`version` in `package.json` (an odd minor for pre-releases and an even minor for stable releases, such as `0.1.0` then
+`0.2.0`) and describe it in [CHANGELOG.md](CHANGELOG.md). If a store fails, run **Release** again for the same commit:
+the GitHub release is kept and a store that already has the version is skipped. A release that exists for another
+commit stops the run.
+
 ## Licence
 
 [MIT](LICENSE). The bundled packages' licences are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
